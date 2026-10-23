@@ -1,0 +1,954 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>你敢寫進紀錄嗎</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@500;700;900&family=Press+Start+2P&display=swap">
+<style>
+/* Layout: a pixel-art clinic scene with a JRPG dialogue window drives the story; beside it, the paper progress note fills in row by row. Single night-time look by design. */
+:root{
+  color-scheme:dark;
+  --bg:#13141D; --panel:#1C1F2E; --line:#33384F; --text:#ECE7DA; --muted:#9CA1B9;
+  --win1:#22305E; --win2:#141E3E; --frame:#E8E2CF; --gold:#F2C14E; --hp:#5FD38D; --hpbg:#2A2F44;
+  --good:#6CCB8F; --warn:#F0B451; --bad:#F27D6C; --seal:#D9483B;
+  --paper:#F3F1EA; --ink:#24242A; --pmuted:#6B6A70; --prule:#D3CFC2; --psoft:#E7E4DA;
+  --sans:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+  --serif:"Noto Serif TC","Songti TC","PMingLiU",serif;
+  --pixel:"Press Start 2P",ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+[hidden]{display:none!important}
+.overlay{position:fixed;inset:0;z-index:50;background:rgba(8,10,20,.82);display:grid;place-items:center;padding:16px}
+.gatebox{width:min(420px,100%);background:linear-gradient(180deg,var(--win1),var(--win2));border:3px solid var(--frame);border-radius:8px;padding:20px;display:grid;gap:12px}
+.gatebox h2{margin:0;font-family:var(--serif);font-size:22px}
+.gatebox p{margin:0;color:var(--muted);font-size:14px}
+.gatebox label{font-size:14px;color:var(--text);display:grid;gap:4px}
+.gatebox input{font:inherit;font-size:16px;padding:10px 12px;border-radius:6px;border:2px solid var(--line);background:var(--bg);color:var(--text)}
+.gatebox input:focus-visible{outline:3px solid var(--gold);outline-offset:1px}
+.gatebox .err{color:var(--bad);font-size:14px;min-height:1.2em}
+.names{display:flex;flex-wrap:wrap;gap:6px}
+.names span{font-size:13px;padding:2px 10px;border-radius:999px;border:1px solid var(--line);background:var(--bg)}
+.names span.voted{border-color:var(--gold);color:var(--gold)}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:16px;line-height:1.6}
+body.host{padding-bottom:calc(76px + env(safe-area-inset-bottom,0px))}
+.wrap{max-width:1200px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:18px 32px}
+header.top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 16px;margin-bottom:14px}
+.brand .kicker{font-size:12px;letter-spacing:.12em;color:var(--muted)}
+.brand h1{margin:0;font-family:var(--serif);font-weight:900;font-size:clamp(22px,4vw,30px);line-height:1.25;text-wrap:balance}
+.status{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:13px;padding:3px 10px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--muted);white-space:nowrap}
+.chip.role{color:var(--gold);border-color:var(--gold)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--muted)} .dot.on{background:var(--hp)}
+
+.grid{display:grid;grid-template-columns:minmax(0,1fr);gap:20px;align-items:start}
+@media (min-width:960px){.grid{grid-template-columns:minmax(0,1.25fr) minmax(0,.9fr)}.record{position:sticky;top:16px}}
+.stage{display:flex;flex-direction:column;gap:14px;min-width:0}
+
+/* scene */
+.screen{position:relative;border:3px solid var(--frame);border-radius:6px;overflow:hidden;background:#000;box-shadow:0 0 0 3px var(--bg),0 0 0 5px var(--line)}
+#cv{display:block;width:100%;max-width:100%;aspect-ratio:16/9;image-rendering:pixelated;image-rendering:crisp-edges}
+.hud{position:absolute;inset:0 0 auto 0;display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:8px 10px;pointer-events:none}
+.hudbox{background:rgba(10,14,32,.78);border:2px solid var(--frame);border-radius:4px;padding:5px 8px;font-size:12px;line-height:1.3;color:var(--text)}
+.hudbox .px{font-family:var(--pixel);font-size:9px;letter-spacing:.04em}
+.hpbar{display:flex;align-items:center;gap:6px;margin-top:4px}
+.hpbar .track{width:84px;height:8px;background:var(--hpbg);border:1px solid var(--frame)}
+.hpbar .fill{height:100%;background:var(--hp);transition:width .6s steps(8)}
+.hpbar .fill.low{background:var(--bad)}
+.hpbar .fill.money{background:var(--gold)}
+.hpbar .fill.money.low{background:var(--bad)}
+.clock{text-align:right}
+.clock .px{font-size:12px;color:var(--gold)}
+@media (max-width:480px){.hudbox{font-size:11px;padding:4px 6px}.hpbar .track{width:60px}}
+
+/* dialogue window */
+.dlg{position:relative;background:linear-gradient(180deg,var(--win1),var(--win2));border:3px solid var(--frame);border-radius:6px;padding:16px 18px 18px;box-shadow:inset 0 0 0 2px #0b1230;min-height:118px;cursor:pointer}
+.dlg .ln{margin:0 0 6px;font-size:17px;line-height:1.75;min-height:1.75em}
+.dlg .ln:last-child{margin-bottom:0}
+.dlg .who{display:inline-block;font-weight:700;color:var(--gold);margin-right:8px}
+.dlg .who.n{color:var(--muted);font-weight:500}
+.dlg .ln.q{font-family:var(--serif);font-weight:700;font-size:19px}
+.dlg .caret{position:absolute;right:10px;bottom:6px;color:var(--gold);font-size:13px;font-weight:700;padding:2px 6px;border:1px solid var(--gold);border-radius:4px;background:rgba(10,14,32,.6);animation:blink 1.2s steps(2) infinite}
+.dlg.adv{cursor:pointer}
+.dlg.adv:hover .caret{animation:none;background:var(--gold);color:#1b1608}
+@keyframes blink{50%{opacity:0}}
+.eyebrow{font-size:13px;letter-spacing:.06em;color:var(--gold);font-weight:700}
+
+/* menu */
+.menu{display:grid;gap:8px}
+.opt{position:relative;display:grid;grid-template-columns:30px minmax(0,1fr);gap:10px;align-items:start;text-align:left;width:100%;padding:12px 14px;border:2px solid var(--line);border-radius:6px;background:var(--panel);color:var(--text);font:inherit;font-size:16px;cursor:pointer;overflow:hidden}
+.opt:hover:not([disabled]){border-color:var(--gold)}
+.opt:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+.opt[disabled]{cursor:default}
+.opt .L{position:relative;z-index:1;display:grid;place-items:center;width:30px;height:30px;border:2px solid var(--frame);border-radius:4px;font-family:var(--pixel);font-size:11px;color:var(--frame)}
+.opt .T{position:relative;z-index:1;min-width:0}
+.opt .bar{position:absolute;inset:0 auto 0 0;background:#2A3152;z-index:0;transition:width .6s ease}
+.opt .n{display:block;margin-top:3px;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.opt.mine,.opt.win{border-color:var(--gold)}
+.opt.mine .L,.opt.win .L{background:var(--gold);border-color:var(--gold);color:#1b1608}
+.opt.lose{opacity:.5}
+.opt.tie{border-style:dashed;border-color:var(--warn)}
+.tag{display:inline-block;font-size:12px;font-weight:700;padding:0 8px;border-radius:999px;background:var(--gold);color:#1b1608;margin-left:6px;vertical-align:2px}
+
+.box{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px 16px}
+.box h3{margin:0 0 8px;font-family:var(--serif);font-size:16px;color:var(--text)}
+.sub{color:var(--muted);font-size:14px;margin:0}
+.steps,.facts{margin:0;padding-left:1.3em;display:grid;gap:4px;font-size:15px}
+details summary{cursor:pointer;color:var(--gold);font-size:14px}
+details[open] summary{margin-bottom:8px}
+.hands{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.hand{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px;border:1px dashed var(--line);border-radius:6px;font-size:13px;color:var(--muted)}
+.hand b{font-family:var(--pixel);font-size:11px;color:var(--text)}
+.hand .row{display:flex;gap:4px;align-items:center;font-variant-numeric:tabular-nums}
+.mini{font:inherit;font-size:13px;padding:2px 10px;border-radius:999px;border:1px solid var(--line);background:var(--bg);color:var(--text);cursor:pointer}
+.mini:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.wait{display:flex;gap:10px;align-items:center;color:var(--muted);font-size:15px}
+.pulse{width:10px;height:10px;background:var(--gold);animation:blink 1s steps(2) infinite}
+
+/* epilogue */
+.events{display:grid;gap:10px}
+.ev{display:grid;grid-template-columns:auto minmax(0,1fr);gap:12px;align-items:start;background:var(--panel);border:2px solid var(--line);border-left-width:6px;border-radius:6px;padding:12px 14px;animation:pop .5s ease both}
+.ev.bad{border-left-color:var(--bad)} .ev.warn{border-left-color:var(--warn)} .ev.good{border-left-color:var(--good)}
+.ev .ic{font-family:var(--pixel);font-size:14px;width:30px;height:30px;display:grid;place-items:center;border:2px solid currentColor;border-radius:4px}
+.ev.bad .ic{color:var(--bad)} .ev.warn .ic{color:var(--warn)} .ev.good .ic{color:var(--good)}
+.ev h4{margin:0 0 2px;font-size:16px}
+.ev p{margin:0;font-size:15px;color:var(--text)}
+@keyframes pop{from{transform:translateY(8px);opacity:0}to{transform:none;opacity:1}}
+
+/* grade */
+.seal{display:grid;place-items:center;border:5px solid var(--seal);color:var(--seal);border-radius:8px;font-family:var(--serif);font-weight:900;transform:rotate(-7deg);line-height:1}
+.seal.big{width:140px;height:140px;font-size:90px}
+.seal.small{width:64px;height:64px;font-size:36px;border-width:4px}
+.stamp{animation:stamp .55s cubic-bezier(.2,1.4,.4,1) both}
+@keyframes stamp{0%{transform:rotate(-7deg) scale(1.9);opacity:0}60%{opacity:1}100%{transform:rotate(-7deg) scale(1);opacity:1}}
+.gradebox{display:grid;grid-template-columns:auto minmax(0,1fr);gap:20px;align-items:center}
+@media (max-width:520px){.gradebox{grid-template-columns:minmax(0,1fr);justify-items:start}}
+.q{font-family:var(--serif);font-weight:700;font-size:clamp(20px,3vw,24px);line-height:1.45;margin:0;text-wrap:balance}
+.score{font-family:var(--pixel);font-size:11px;color:var(--muted)}
+.score b{font-size:22px;color:var(--text)}
+.scale{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.scale div{border:1px solid var(--line);border-radius:6px;padding:6px 8px;font-size:12px;color:var(--muted)}
+.scale div b{font-family:var(--serif);font-size:18px;color:var(--text);margin-right:4px}
+.scale div.on{border-color:var(--seal);color:var(--seal)} .scale div.on b{color:var(--seal)}
+.capnote{color:var(--bad);font-size:14px;margin:0}
+.refs p{margin:0 0 6px;font-size:14px;color:var(--muted);padding-left:2em;text-indent:-2em}
+.refs i{color:var(--text)}
+.cd{float:right;font-family:var(--pixel);font-size:11px;color:var(--gold);padding:2px 6px;border:1px solid var(--gold);border-radius:4px}
+.cd:empty{display:none}
+.cd.low{color:var(--bad);border-color:var(--bad);animation:blink 1s steps(2) infinite}
+.opt .n{display:inline;margin:0 0 0 8px;white-space:nowrap}
+@media (max-width:640px){.hostbar .in{flex-wrap:nowrap;gap:6px}.hostbar .left{gap:6px;flex-wrap:nowrap}.hostbar .ghost{padding:6px 10px;font-size:13px}.tg.secs{display:none}.hostbar .hint{display:none}}
+#hb-secs{font:inherit;font-size:13px;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:4px;padding:2px 4px}
+.opt{padding:10px 12px;font-size:15px;line-height:1.5}
+.tools{display:flex;flex-wrap:wrap;gap:6px}
+.tool{font:inherit;font-size:13px;padding:5px 12px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--gold);cursor:pointer}
+.tool:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+@media (min-width:960px){.tool.m-only{display:none}}
+.soap{display:flex;gap:4px;align-items:center;font-size:12px;color:var(--muted)}
+.soap b{font-family:var(--pixel);font-size:10px;width:24px;height:24px;display:grid;place-items:center;border:2px solid var(--line);border-radius:4px;color:var(--muted)}
+.soap b.done{border-color:var(--good);color:var(--good)}
+.soap b.now{border-color:var(--gold);background:var(--gold);color:#1b1608}
+.soap span{margin-left:6px}
+.sp{font-style:normal;font-family:var(--pixel);font-size:8px;margin-left:4px;padding:1px 3px;border:1px solid var(--ink);border-radius:3px;color:var(--ink);vertical-align:1px}
+.hint{color:var(--muted);font-size:13px}
+.sheet-wrap{position:fixed;inset:0;z-index:40;background:rgba(8,10,20,.6);display:flex;align-items:flex-end;justify-content:center}
+.sheet{width:min(560px,100%);max-height:82vh;overflow:auto;background:var(--panel);border:2px solid var(--frame);border-bottom:0;border-radius:12px 12px 0 0;padding:14px 16px calc(16px + env(safe-area-inset-bottom,0px))}
+.sheet-h{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px}
+.sheet-h b{font-family:var(--serif);font-size:17px}
+@media (min-width:960px){.sheet-wrap{align-items:center}.sheet{border-bottom:2px solid var(--frame);border-radius:10px}}
+@media (max-width:959px){#record{display:none}}
+.screen{width:min(100%,calc(30vh * 16 / 9));margin:0 auto}
+@media (min-width:641px){.wrap{padding-block:12px 24px}header.top{margin-bottom:10px}.brand h1{font-size:22px}.stage{gap:10px}.dlg{padding:12px 16px 14px}.dlg .ln{font-size:16px;line-height:1.65;margin-bottom:2px}.dlg .ln.q{font-size:17px}.menu{gap:6px}.opt{padding:8px 12px}.opt .L{width:26px;height:26px}}
+@media (min-width:960px){.record{max-height:calc(100vh - 110px)!important}.dlg{min-height:0}}
+@media (max-width:640px){.screen{width:100%}.hud{padding:5px 6px}.hudbox{font-size:10px;padding:3px 5px;border-width:1px}.hudbox .px{font-size:7px}.hpbar{margin-top:2px;gap:4px}.hpbar .track{width:44px;height:6px}.clock .px{font-size:9px}}
+@media (max-width:640px){
+  .wrap{padding-block:8px 16px}
+  header.top{margin-bottom:8px;gap:6px} .brand .kicker{display:none} .brand h1{font-size:17px}
+  .stage{gap:8px}
+  .dlg{padding:9px 12px 12px;min-height:0;border-width:2px}
+  .dlg .ln{font-size:14.5px;line-height:1.6;margin-bottom:2px}
+  .dlg .ln.q{font-size:15.5px}
+  .menu{gap:6px}
+  .opt{padding:7px 10px;font-size:14px;gap:8px;grid-template-columns:24px minmax(0,1fr);line-height:1.45;border-width:1.5px}
+  .opt .L{width:24px;height:24px;font-size:9px}
+  .opt .n{font-size:12px;margin-top:1px}
+  .eyebrow{font-size:12px}
+  .box{padding:10px 12px}
+  .hostbar{padding-top:8px;padding-bottom:calc(8px + env(safe-area-inset-bottom,0px))}
+  .btn{font-size:15px;padding:8px 16px}
+  body.host{padding-bottom:calc(64px + env(safe-area-inset-bottom,0px))}
+}
+.form{border:1.5px solid var(--ink);margin-top:10px;font-size:14px}
+.fh{display:flex;justify-content:space-between;gap:8px;padding:6px 8px;border-bottom:1.5px solid var(--ink);font-size:14px;flex-wrap:wrap}
+.fh span{font-family:var(--sans);font-size:12px;color:var(--pmuted)}
+.fmeta{display:flex;flex-wrap:wrap;gap:4px 16px;padding:4px 8px;border-bottom:1px solid var(--prule);font-family:var(--sans);font-size:12px}
+.fsec{font-family:var(--sans);font-weight:700;font-size:12px;padding:4px 8px;background:var(--psoft);border-bottom:1px solid var(--prule)}
+.fr{display:grid;grid-template-columns:5.2em minmax(0,1fr);border-bottom:1px solid var(--prule)}
+.fr:last-child{border-bottom:0}
+.fk{padding:6px 8px;font-family:var(--sans);font-size:12px;color:var(--pmuted);border-right:1px solid var(--prule)}
+.fv{padding:6px 8px;min-width:0;overflow-wrap:anywhere;display:grid;gap:4px;line-height:1.6}
+.sub-ent.on{background:var(--psoft);border-radius:3px}
+.sub-ent .lab{font-family:var(--sans);font-size:11px;color:var(--pmuted);margin-right:6px}
+.ent.now{font-family:var(--sans);font-size:12px;color:var(--pmuted)}
+.ent.fresh{animation:ink 1s ease}
+.blank{display:inline-block;min-width:4em;color:var(--pmuted);font-family:var(--sans);font-size:12px}
+.cbs{display:flex;flex-wrap:wrap;gap:2px 10px;font-family:var(--sans);font-size:12px}
+.cbk{color:var(--pmuted)}
+.cb{white-space:nowrap;color:var(--pmuted)} .cb.on{color:var(--ink);font-weight:700}
+.fsign{display:grid;gap:2px;padding:6px 8px;border-top:1.5px solid var(--ink);font-family:var(--sans);font-size:12px}
+@media (min-width:960px){.record{max-height:calc(100vh - 32px);overflow-y:auto}}
+.fullnote .note{margin:0 0 8px;font-family:var(--serif);font-size:15.5px;line-height:1.85;background:var(--paper);color:var(--ink);padding:12px 14px;border-radius:4px}
+.prof-in{display:grid;grid-template-columns:auto minmax(0,1fr);gap:14px;align-items:start}
+.ava{width:64px;height:64px;image-rendering:pixelated;border:2px solid var(--frame);border-radius:4px}
+.prof dl{margin:0;display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 12px;font-size:15px}
+.prof dt{color:var(--gold);font-size:13px;white-space:nowrap;padding-top:2px}
+.prof dd{margin:0;min-width:0}
+@media (max-width:420px){.prof-in{grid-template-columns:minmax(0,1fr)}}
+.gameover{border:3px solid var(--bad);border-radius:6px;padding:16px 18px;background:#2A1620;display:grid;gap:8px;animation:pop .5s ease both}
+.gameover .go-t{font-family:var(--pixel);font-size:clamp(18px,4vw,26px);color:var(--bad);letter-spacing:.06em}
+.gameover .go-s{font-family:var(--serif);font-weight:900;font-size:18px}
+.gameover p{margin:0;font-size:15px}
+
+/* compare */
+.cmp{display:grid;gap:10px}
+.ci{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px 14px;display:grid;gap:8px}
+.ci h4{margin:0;font-family:var(--serif);font-size:16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.two{display:grid;grid-template-columns:minmax(0,1fr);gap:8px}
+@media (min-width:640px){.two{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
+.two>div{border-radius:6px;padding:8px 10px;font-family:var(--serif);font-size:15px;min-width:0}
+.two small{display:block;font-family:var(--sans);font-size:12px;color:var(--muted);margin-bottom:2px}
+.ours{background:#262A3D} .best{border:2px solid var(--gold)}
+.why{margin:0;font-size:14px;color:var(--muted)} .why cite{font-style:normal;color:var(--gold)}
+.mark{display:inline-block;font-family:var(--sans);font-size:12px;font-weight:700;padding:0 7px;border-radius:999px;margin-right:6px;vertical-align:1px;border:1px solid currentColor}
+.mark.g{color:var(--good)} .mark.w{color:var(--warn)} .mark.b{color:var(--bad)}
+
+/* paper record */
+.record{background:var(--paper);color:var(--ink);border-radius:3px;padding:16px 16px 12px;font-family:var(--serif);min-width:0;box-shadow:0 14px 34px -16px rgba(0,0,0,.7)}
+.record .mark.g{color:#2C7A4B} .record .mark.w{color:#9A6210} .record .mark.b{color:#B0372B}
+.rec-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;border-bottom:2px solid var(--ink);padding-bottom:6px;flex-wrap:wrap}
+.rec-head h2{margin:0;font-size:19px;font-weight:900;letter-spacing:.06em}
+.rec-head span{font-family:var(--sans);font-size:12px;color:var(--pmuted)}
+.meta{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-bottom:1px solid var(--ink);font-size:13px}
+.meta div{padding:5px 6px;border-right:1px solid var(--prule);min-width:0}
+.meta div:last-child{border-right:0}
+.meta small{display:block;color:var(--pmuted);font-family:var(--sans);font-size:11px}
+.sec{font-family:var(--sans);font-size:12px;font-weight:700;color:var(--pmuted);letter-spacing:.08em;padding:10px 0 2px;border-bottom:1px solid var(--ink)}
+.r{display:grid;grid-template-columns:5.4em minmax(0,1fr);border-bottom:1px solid var(--prule);min-height:42px}
+.r .k{padding:7px 8px 7px 0;font-size:12px;color:var(--pmuted);font-family:var(--sans);border-right:1px solid var(--prule)}
+.r .k b{display:block;font-family:var(--serif);color:var(--ink);font-size:14px}
+.r .v{padding:7px 0 7px 10px;font-size:14.5px;line-height:1.65;min-width:0;overflow-wrap:anywhere}
+.r .v.empty{color:var(--pmuted);font-family:var(--sans);font-size:12px}
+.r.now{background:var(--psoft)}
+.r.fresh .v{animation:ink 1s ease}
+@keyframes ink{from{background:#F7E3A8}to{background:transparent}}
+.sign{display:flex;justify-content:flex-end;align-items:center;gap:10px;padding-top:10px;font-size:13px;color:var(--pmuted);font-family:var(--sans)}
+.seal-slot{width:68px;height:68px;display:grid;place-items:center}
+
+/* host bar */
+.hostbar{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--panel);border-top:2px solid var(--frame);padding-top:12px;padding-bottom:calc(12px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.hostbar .in{max-width:1200px;margin:0 auto;display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.hostbar .left{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13px;color:var(--muted)}
+.btn{font:inherit;font-weight:700;font-size:16px;padding:10px 22px;border-radius:6px;border:2px solid var(--frame);background:var(--gold);color:#1b1608;cursor:pointer}
+.btn:focus-visible{outline:3px solid var(--text);outline-offset:2px}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.ghost{font:inherit;font-size:14px;padding:7px 14px;border-radius:6px;border:1px solid var(--line);background:transparent;color:var(--text);cursor:pointer}
+.ghost.danger{color:var(--bad);border-color:var(--bad)}
+.ghost:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+label.tg{display:inline-flex;gap:6px;align-items:center;cursor:pointer}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(100px + env(safe-area-inset-bottom,0px));background:var(--text);color:var(--bg);padding:8px 16px;border-radius:999px;font-size:14px;z-index:30;max-width:calc(100% - 32px)}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand"><div class="kicker">記錄撰寫原則 · 體驗活動</div><h1>你敢把這句寫進紀錄嗎？</h1></div>
+    <div class="status" id="status"></div>
+  </header>
+  <div class="grid">
+    <main class="stage">
+      <div class="screen"><canvas id="cv" width="192" height="108" aria-label="遊戲場景"></canvas><div class="hud" id="hud"></div></div>
+      <div class="dlg" id="dlg" aria-live="polite" tabindex="0"></div>
+      <div id="panel" style="display:grid;gap:12px"></div>
+    </main>
+    <aside class="record" id="record" aria-label="晤談紀錄表"></aside>
+  </div>
+</div>
+<div class="hostbar" id="hostbar" hidden></div>
+<div class="toast" id="toast" hidden></div>
+<div class="overlay" id="gate" hidden></div>
+<div class="sheet-wrap" id="sheet" hidden></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script>
+/* ================= 設定：把 Firebase 給你的設定貼在這裡 ================= */
+const FIREBASE_CONFIG={
+  apiKey:"AIzaSyBSMiCG6Hwz5xjvOehQQuOL4UA4IulNBSA",
+  authDomain:"record-game-f9ff8.firebaseapp.com",
+  databaseURL:"https://record-game-f9ff8-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId:"record-game-f9ff8",
+  storageBucket:"record-game-f9ff8.firebasestorage.app",
+  messagingSenderId:"483536378040",
+  appId:"1:483536378040:web:c2dbd37390ed898fc47c4d"
+};
+/* ================= content ================= */
+const LETTERS=["A","B","C","D"];
+const PROFILE=[
+  ["個案","小安（化名）・24 歲・女"],
+  ["工作","科技公司行政助理，第 2 年"],
+  ["居住","和媽媽同住；爸媽離婚，爸爸很少聯絡"],
+  ["來談原因","半年來失眠、焦慮，上班常心悸，朋友推薦她來"],
+  ["困擾","想換工作，但媽媽強烈反對；常說自己「做什麼都沒用」"],
+  ["就醫","精神科醫師診斷為失眠症，有開助眠藥"],
+  ["晤談進度","第 1 次初談、第 2 次訂目標（降低焦慮、改善睡眠），今天第 3 次"],
+  ["緊急聯絡人","媽媽"]
+];
+const FACTS=[
+  "遲到 15 分鐘，語速很快，晤談中看了 3 次手機",
+  "這週有 3 晚躺超過 1 小時才睡著；焦慮自評 7 分（上週 8 分）",
+  "和同住的母親為了換工作的事吵架，講到這裡時哭了",
+  "提到「有時候覺得消失也沒關係」（你當場評估：沒有具體計畫、沒有工具、沒有自傷史）",
+  "她的精神科醫師診斷為失眠症，有開助眠藥",
+  "她描述一個在海裡溺水的夢；你也發現自己對她一直說「沒用啦」有點煩躁"
+];
+const ROUNDS=[
+ {id:"tired",k:"撰寫時間",sec:3,q:"……等等，小安的紀錄還沒寫。怎麼辦？",ctx:p=>p[10]===0?"晚上 11:00，你躺在沙發上，體力還有 45%。":"晚上 11:00，你癱在沙發上，體力只剩 2%。",
+  o:[{t:"明天一早到諮商所，第一件事就把紀錄寫完。",r:"115/10/23 08:45（晤談隔日上班第一件事）",p:3},
+     {t:"明天有空再說吧。",r:"115/10/23 17:30（補寫）",p:1},
+     {t:"反正我都記得，不寫了。",r:"115/10/26（主管抽查後補寫）",p:0},
+     {t:"先用自己的手機記事本，把小安說的重點打下來。",r:"115/10/23 09:30（依手機記事整理）",p:1}],
+  why:"最理想是晤談後 10 分鐘就寫完再下班（林家興建議「50 分鐘晤談、10 分鐘寫紀錄」）。既然已經回家，就隔天一早回諮商所寫；拖越久記得越不準，不做紀錄在今天是不可原諒的。個案資料存在私人手機，也有外洩風險。",src:"林家興（2023），頁 151；Corey 等（2024），頁 172、174"},
+ {id:"s",k:"主訴",code:"S",sec:3,q:"她談到這週的睡眠和焦慮，你要怎麼寫？",ctx:"（回想）她說這週有 3 晚躺超過 1 小時才睡著，焦慮自評 7 分，上週是 8 分。",
+  o:[{t:"個案又在抱怨睡不好，感覺只是想找人發洩。",p:0},
+     {t:"個案表示本週有 3 晚躺床超過 1 小時才入睡，焦慮自評 7 分（滿分 10），上週為 8 分。",p:3},
+     {t:"個案睡很差，焦慮很嚴重。",p:1},
+     {t:"把她說的話全部逐字記下來，大約兩頁。",r:"（逐字記錄晤談內容，共兩頁）",p:1}],
+  why:"寫具體、可追蹤的事實，不寫心理師的情緒；太模糊看不出變化，逐字稿則太冗長，也增加保密風險。",src:"林家興（2023），頁 148；Corey 等（2024），頁 172"},
+ {id:"o",k:"觀察",code:"O",sec:3,q:"晤談中你觀察到的狀況，要怎麼寫？",ctx:"（回想）她遲到 15 分鐘，講話很快，中間看了 3 次手機。",
+  o:[{t:"個案態度不佳，明顯不重視諮商。",p:0},
+     {t:"個案遲到 15 分鐘，語速快，晤談中看手機 3 次。",p:3},
+     {t:"個案看起來很焦慮，疑似廣泛性焦慮症。",p:1},
+     {t:"個案遲到。",p:2}],
+  why:"描述看得到的行為，不寫評價或沒經過評估的診斷。「個案遲到」沒錯，但少了能看出狀態的細節。",src:"林家興（2023），頁 148；Corey 等（2024），頁 174"},
+ {id:"fam",k:"家庭",code:"S",sec:3,cut:true,q:"她談到和母親的衝突，你要怎麼寫？",ctx:"（回想）她和母親同住，最近為了換工作的事吵架，講到這裡時哭了。",
+  o:[{t:"母親控制慾很強，人格可能有問題，是個案焦慮的根源。",p:0},
+     {t:"個案表示與母親同住，近期因換工作的決定與母親爭執，談及此事時哭泣。",p:3},
+     {t:"詳細記下母親說過的每一句重話，以及母親自己小時候的成長經驗。",r:"母親曾對個案說的重話逐條記錄如下……另，母親幼年成長經驗為……",p:1},
+     {t:"家裡的事太敏感，完全不寫。",r:"（未記錄）",p:1}],
+  why:"紀錄只寫和個案有關的臨床資料。不評論個案的父母，也不寫太多他人的資料；但重要壓力源完全不寫也不行。",src:"林家興（2023），頁 149"},
+ {id:"risk",k:"風險",code:"A",sec:3,q:"這段要怎麼寫進紀錄？",ctx:"（回想）她說「有時候覺得消失也沒關係」，拜託你不要讓別人知道。你評估後：沒有具體計畫、沒有工具、沒有自傷史，沒有立即危險，也判斷暫時不需要通知家人。",
+  o:[{t:"只寫：個案提到有時覺得消失也沒關係。",r:"個案提到「有時覺得消失也沒關係」。",p:1},
+     {t:"完整寫下她說的話、你的評估、安全計畫，以及她不希望別人知道、你判斷暫不通知家屬的理由。",r:"個案提到「有時覺得消失也沒關係」。經評估無具體計畫、無工具、無自傷史，無立即危險；個案不希望他人知道，評估後暫不通知家屬，並已向個案說明保密例外。已擬定安全計畫並提供 1925 安心專線，下次晤談再評估。",p:3},
+     {t:"她拜託我不要讓別人知道，所以紀錄裡不寫。",r:"（未記錄）",p:0},
+     {t:"寫成「個案近期情緒低落」，不提到自殺。",r:"個案近期情緒低落。",p:0}],
+  why:"幫個案保密，不等於不寫進紀錄。自殺意念要寫下評估、處置，以及你判斷暫不通知家人的理由；只寫有風險、沒寫評估和處置，出事時反而對心理師不利，不寫或寫得含糊更危險。",src:"林家興（2023），頁 148；Corey 等（2024），頁 172、175"},
+ {id:"med",k:"醫療",code:"S",sec:3,cut:true,q:"失眠症是精神科醫師診斷的，你要怎麼寫？",ctx:"（回想）她的精神科醫師診斷為失眠症，有開助眠藥。",
+  o:[{t:"個案有失眠症，正在服用安眠藥。",p:1},
+     {t:"據個案表示，其精神科醫師診斷為失眠症，目前服用助眠藥物。",p:3},
+     {t:"個案有藥物依賴傾向，建議減藥。",p:0},
+     {t:"個案有在看精神科。",p:1}],
+  why:"別人提供的資料要註明來源，否則看起來像心理師自己下的診斷。用藥建議超出心理師的專業範圍。",src:"林家興（2023），頁 149"},
+ {id:"proc",k:"歷程紀錄",sec:3,q:"要不要另外寫一份歷程紀錄？",ctx:"（回想）她描述在海裡溺水的夢；你對她一直說「沒用啦」感到煩躁，想下次督導時討論。晤談紀錄（又叫進展紀錄）是要留存的正式紀錄，簡短客觀，可能成為法庭證據；歷程紀錄（又叫過程紀錄、心理治療紀錄）則像心理師的個人日記。",
+  o:[{t:"不另外寫，直接把夢境和你的煩躁寫進晤談紀錄。",r:"個案夢見在海裡溺水，象徵被母親吞噬；心理師對個案感到煩躁，疑似反移情。",p:0},
+     {t:"寫一份歷程紀錄當個人日記，私下收好；督導討論完就銷毀。",r:"（夢境與心理師感受另記於個人日記，供督導使用，不入正式紀錄）",p:3},
+     {t:"寫一份歷程紀錄，和晤談紀錄一起放進個案檔案。",r:"【附件】歷程紀錄：個案夢見溺水……心理師對個案感到煩躁……",p:1},
+     {t:"不寫歷程紀錄，也不拿去督導。",r:"（未記錄）",p:2}],
+  why:"晤談紀錄＝進展紀錄（progress note），是要留存的正式紀錄；歷程紀錄＝過程紀錄＝心理治療紀錄（process note），不是病歷。課本建議只針對需要督導或反思的少數個案寫，寫了就當私人日記收著，用完就銷毀。寫進晤談紀錄或放進個案檔案，被調閱時都可能被揭露。",src:"林家興（2023），頁 149–150；Corey 等（2024），頁 173"},
+ {id:"plan",k:"計畫",code:"P",sec:3,q:"接下來的處遇計畫，要怎麼寫？",ctx:"（回想）下次想教她呼吸放鬆，並追蹤睡眠和安全計畫。",
+  o:[{t:"下次再看看。",p:0},
+     {t:"維持每週 1 次晤談；下次練習腹式呼吸，追蹤睡眠紀錄與安全計畫執行情形。",p:3},
+     {t:"下次要讓個案認清母親的問題，鼓勵她搬出去住。",p:0},
+     {t:"一整段認知行為治療理論，說明焦慮如何由自動化思考形成……",r:"依認知行為治療理論，焦慮源於自動化思考，其形成機制如下……（以下約半頁）",p:1}],
+  why:"計畫要具體、可追蹤，並寫下策略和追蹤評量。不替個案做決定，也不需要寫成理論報告。",src:"林家興（2023），頁 148；Corey 等（2024），頁 174"},
+ {id:"sign",k:"簽章",sec:3,cut:true,q:"寫完才發現日期寫錯了（10/22 寫成 10/12），怎麼辦？",ctx:"紀錄已經放進個案檔案。",
+  o:[{t:"用立可白塗掉，再寫上正確日期。",r:"115/10/22（有立可白塗改痕跡）",p:0},
+     {t:"在錯的日期上劃一條線，旁邊寫上正確日期，簽名並註明更正日期。",r:"115/<s>10/12</s> 10/22　更正：心理師簽章 115/10/23",p:3},
+     {t:"把這頁撕掉，整份重寫。",r:"115/10/22（原頁已撕除重寫）",p:0},
+     {t:"差幾天而已，不用改。",r:"115/10/12",p:1}],
+  why:"紀錄放進檔案後絕對不能竄改。寫錯時劃線更正，簽名並押上日期，不可以塗改或撕掉。",src:"林家興（2023），頁 151；Corey 等（2024），頁 175"},
+ {id:"notify",k:"風險處置",sec:5,q:"……接下來要怎麼做？",ctx:"晤談結束，晚上 8:58。小安已經離開，你的體力只剩 5%。",
+  o:[{t:"24 小時內完成自殺防治通報；先向小安說明保密例外，聯絡緊急聯絡人、更新安全計畫，並把評估與處置寫進紀錄。",
+      r:"個案表示上週末曾過量服用助眠藥物，經評估屬自殺行為。已於 24 小時內完成自殺防治通報；已向個案說明保密例外並聯絡緊急聯絡人，更新安全計畫，約定 3 天後電話關懷。",p:3},
+     {t:"她看起來還好，又拜託我保密。太累了，下次晤談再說。",r:"個案情緒平穩，下次晤談再評估。",p:0},
+     {t:"有通報、也處理了，但太累了，紀錄之後再說。",r:"（未記錄）",p:1},
+     {t:"把這件事寫進紀錄，但尊重她的意願，不通報。",r:"個案表示上週末曾過量服用助眠藥物，個案要求保密。",p:0}],
+  why:"醫事人員（包括心理師）知悉有自殺行為，應在 24 小時內通報；當事人有生命危險屬於保密例外。危急時記下自己採取的行動，也是在保護自己。",src:"自殺防治法第 11 條、施行細則第 13 條；Corey 等（2024），頁 175"},
+ {id:"load",k:"今日排班",sec:0,unscored:true,q:"今天要接幾位個案？",ctx:"最後一位一定是小安（20:00–21:00），她的第 3 次晤談。",
+  o:[{t:"2 位：17:00–18:00、20:00–21:00。輕鬆，但這個月可能會餓死。"},
+     {t:"6 位：從下午一路排到晚上。收入夠了，但體力會只剩 5%。"}]},
+ {id:"sup",k:"主管查核",sec:4,q:"主管要看小安的紀錄，你會給嗎？",ctx:"小安上次拜託你，不要讓別人知道她想消失。",
+  o:[{t:"給。紀錄是機構的，主管要什麼都給，連我的歷程紀錄一起交出去。",r:"115/10/26 主管查核：提供完整個案檔案（含心理師個人歷程紀錄）",p:1},
+     {t:"給主管看正式的晤談紀錄，確認完整；歷程紀錄是個人日記，不提供。",r:"115/10/26 主管查核：提供晤談紀錄；歷程紀錄屬個人筆記，未提供",p:3},
+     {t:"不給。小安說過不想讓別人知道。",r:"115/10/26 主管要求查閱，心理師拒絕",p:1},
+     {t:"先把之前沒寫完的補一補、改得漂亮一點，再給主管。",r:"115/10/26 修改舊紀錄後提供主管",p:0}],
+  why:"諮商所依法要妥善保管紀錄，也要督導所屬人員，主管為了查核紀錄是否完整而調閱是正當的（最好在知情同意時就先告訴個案）。給的是正式紀錄；歷程紀錄是個人日記，不屬於病歷。事後修改舊紀錄就是竄改。",src:"林家興（2023），頁 150–151；Corey 等（2024），頁 175"},
+ {id:"access",k:"當事人調閱",sec:4,q:"小安要看她的紀錄，你怎麼做？",ctx:"她很激動，聲音大到櫃檯都聽得到。",
+  o:[{t:"答應她，並且陪她一起看，逐句說明寫了什麼、為什麼這樣寫，以及哪些人看得到。",r:"個案要求查閱紀錄。心理師陪同個案閱讀並說明內容，以及紀錄的用途與保密範圍；個案情緒逐漸平穩。",p:3},
+     {t:"把紀錄印給她，讓她自己帶回去看。",r:"個案要求查閱紀錄，已提供複本由個案自行閱讀。",p:2},
+     {t:"拒絕。紀錄是心理師寫的，個案不能看。",r:"個案要求查閱紀錄，心理師拒絕。",p:0},
+     {t:"請主管陪她看就好，你先離開，避免衝突。",r:"個案要求查閱紀錄，由主管陪同個案閱讀。",p:1}],
+  why:"當事人有權查閱或複印自己的紀錄，除非能證明會對她產生誤導或不利；醫療法也規定不得無故拒絕。心理師在場一起看、說明內容，最能減少誤解。這也是為什麼下筆前要先假設個案會讀到。",src:"林家興（2023），頁 148、151；Corey 等（2024），頁 174"},
+ {id:"inform",k:"保密",sec:0,unscored:true,gate:true,q:"要通知她的家人嗎？",ctx:"晚上 8:40，晤談還剩 20 分鐘。小安低著頭，等你回答。",
+  o:[{t:"打電話給她媽媽，請家人多留意她。",over:"你打給小安的媽媽。隔天，小安取消了之後所有的晤談，也不再接諮商所的電話。"},
+     {t:"尊重她的意願保密，和她一起擬定安全計畫，並說明保密例外：如果有立即危險，我就會通知家人。"},
+     {t:"直接通報衛生局，交給專業單位處理。",over:"衛生局的關懷訪視員打電話到小安家，是她媽媽接的。小安覺得被出賣，再也沒有回來。"}],
+  why:"沒有立即危險時，自殺意念不屬於法定通報範圍（醫事人員必須通報的是「知悉自殺行為」）。這時通知家人或通報，等於違反保密，治療關係也跟著斷了。該做的是保密、擬定安全計畫，並事先說明保密例外。"}
+];
+const SCORED=ROUNDS.filter(r=>!r.unscored&&!r.cut).length, MAX=SCORED*3;
+const GRADES=[
+ {g:"ㄅ",min:23,t:"經得起檢視",d:"就算法官和個案明天一起讀這份紀錄，你也不用擔心。"},
+ {g:"ㄆ",min:17,t:"大致可以",d:"有幾句被調閱時需要你解釋，修一修就好。"},
+ {g:"ㄇ",min:10,t:"風險不少",d:"有主觀評價、漏寫或寫太多，可能傷到個案，也傷到自己。"},
+ {g:"ㄈ",min:0,t:"請重寫",d:"這份紀錄被調閱時，很可能變成對你不利的證據。"}
+];
+const N=(t)=>({who:"旁白",t});
+const STEPS=[{type:"lobby"},{type:"story",id:"intro"},{type:"vote",r:10},{type:"story",id:"session"},{type:"vote",r:13},{type:"story",id:"work"},{type:"story",id:"commute"},{type:"story",id:"home"},{type:"vote",r:0},{type:"story",id:"bridge"}];
+[1,2,4,7,6].forEach(i=>STEPS.push({type:"vote",r:i}));
+STEPS.push({type:"story",id:"audit"},{type:"vote",r:11},{type:"story",id:"angry"},{type:"vote",r:12},{type:"story",id:"week"},{type:"vote",r:9},{type:"epilogue"},{type:"grade"},{type:"ideal"});
+const VOTE_ORDER=STEPS.filter(s=>s.type==="vote").map(s=>s.r);
+
+function storyLines(id,picks){
+  const two=picks[10]===0;
+  if(id==="intro")return[N("10/22（四）中午 12:30，晴光社區心理諮商所。"),N("你是這裡的心理師，正在排今天的班表。"),{who:"主管",t:"今天預約很多，你看要接幾位？"}];
+  if(id==="session")return[two?N("17:00 第一位個案，18:00 結束。你吃了個便當，休息一下。20:00，小安來了。"):N("從下午開始，一位接著一位，中間只喝了幾口水。20:00，最後一位小安來了。"),
+    N("24 歲的她和媽媽同住，半年來失眠、焦慮。今天談到想換工作卻被媽媽反對，她哭了。"),
+    {who:"小安",t:"有時候覺得……消失也沒關係。"},{who:"小安",t:"你不要跟我媽說，拜託。"},N("你仔細評估：沒有具體計畫、沒有工具、沒有自傷史，目前沒有立即危險。")];
+  if(id==="work")return two
+    ?[N("21:00，小安離開。"),{who:"心理師",t:"體力還行……但這個月要吃泡麵了。"},N("你想著紀錄回家再說，收拾東西就下班了。")]
+    :[N("21:00，小安離開，你的體力只剩 5%。"),{who:"心理師",t:"……撐不住了，先下班。"},N("紀錄先放著，你收拾東西就走了。")];
+  if(id==="commute")return[N("21:00 下班。"),N("捷運轉公車，晃了 40 分鐘，21:40 終於到家。")];
+  if(id==="home")return[N("先吃飯、滑一下手機、洗個澡，再追兩集劇，讓身心平衡一下。"),N("回過神來，已經 23:00。")];
+  if(id==="bridge"){
+    const p=picks[0],tail=N("這份紀錄照 SOAP 的順序寫：S 主觀陳述、O 客觀觀察、A 評估、P 計畫。每一欄怎麼寫，都由大家投票決定。");
+    if(p===0)return[N("隔天早上 8:45，你比平常早一點到諮商所。"),{who:"心理師",t:"趁還記得，先把小安的紀錄寫完。"},tail];
+    if(p===1)return[N("隔天又是滿滿的行程，一直到傍晚 5:30 才有空。"),{who:"心理師",t:"昨天她說焦慮幾分來著……7 分？還是 6 分？"},N("你努力回想，打開紀錄表。"),tail];
+    if(p===2)return[N("隔週一早上，主管抽查檔案。"),{who:"主管",t:"小安的紀錄呢？"},{who:"心理師",t:"……我現在補。"},N("你憑著模糊的記憶打開紀錄表。"),tail];
+    return[N("隔天早上 9:30，你打開手機記事本，照著昨晚打的重點寫紀錄。"),tail];
+  }
+  if(id==="audit")return[N("10/26（一）。上個月，同機構有位心理師的紀錄沒寫完，被衛生局抽查時出了問題。"),{who:"主管",t:"從這週開始，我要看大家的個案紀錄。小安的先給我。"}];
+  if(id==="angry")return[N("10/29（四），小安的第 4 次晤談。她一進門就很激動。"),{who:"小安",t:"我媽昨天突然問我是不是想不開！是不是你跟別人說了？"},{who:"小安",t:"你到底寫了什麼？我要看我的紀錄！"}];
+  if(id==="week")return[N("又過了一週，小安的第 5 次晤談。"),{who:"小安",t:"其實……上週末我把存下來的助眠藥一次吃掉了。睡了一天一夜，家裡沒人發現。"},{who:"小安",t:"我現在沒事了啦。拜託你，不要跟任何人說。"},N("你仔細評估後確認：這是一次自殺行為。")];
+  return[];
+}
+function hudFor(step,picks){
+  const s=STEPS[step],two=picks[10]===0,picked=picks[10]!=null,id=s.type==="story"?s.id:s.type==="vote"?"v"+s.r:s.type;
+  const money=!picked?50:two?12:85;
+  if(["lobby","intro","v10"].includes(id))return{day:"10/22（四）",time:"12:30",hp:100,money};
+  if(id==="session"||id==="v13")return{day:"10/22（四）",time:"20:40",hp:two?65:10,money};
+  if(id==="work")return{day:"10/22（四）",time:"21:00",hp:two?60:5,money};
+  if(id==="commute")return{day:"10/22（四）",time:"21:40",hp:two?55:4,money};
+  if(id==="home"||id==="v0")return{day:"10/22（四）",time:"23:00",hp:two?45:2,money};
+  if(id==="bridge"||s.type==="vote"&&s.r>=1&&s.r<=8){
+    const p=picks[0];
+    if(p===0)return{day:"10/23（五）",time:"08:45",hp:80,money};
+    if(p===1)return{day:"10/23（五）",time:"17:30",hp:30,money};
+    if(p===2)return{day:"10/26（一）",time:"09:10",hp:70,money};
+    return{day:"10/23（五）",time:"09:30",hp:75,money};
+  }
+  if(id==="audit"||id==="v11")return{day:"10/26（一）",time:"14:00",hp:70,money};
+  if(id==="angry"||id==="v12")return{day:"10/29（四）",time:"20:05",hp:two?50:15,money};
+  if(id==="week")return{day:"11/05（四）",time:"20:00",hp:two?50:20,money};
+  if(id==="v9")return{day:"11/05（四）",time:"20:58",hp:two?40:5,money};
+  return{day:"三個月後",time:"10:00",hp:60,money};
+}
+function sceneFor(step,picks){
+  const s=STEPS[step],id=s.type==="story"?s.id:s.type==="vote"?"v"+s.r:s.type;
+  if(id==="lobby")return{k:"office",night:true,tired:true};
+  if(id==="intro"||id==="v10")return{k:"office",night:false};
+  if(id==="session")return{k:"room",mood:"sad"};
+  if(id==="v13")return isOver()?{k:"room",mood:"gone"}:{k:"room",mood:"sad"};
+  if(id==="work")return{k:"office",night:true,tired:picks[10]!==0};
+  if(id==="commute")return{k:"street"};
+  if(id==="home"||id==="v0")return{k:"home",low:picks[10]!==0};
+  if(id==="bridge"||s.type==="vote"&&s.r>=1&&s.r<=8)return{k:"office",night:false,writing:true};
+  if(id==="audit"||id==="v11")return{k:"office",night:false,boss:true};
+  if(id==="angry"||id==="v12")return{k:"room",mood:"angry"};
+  if(id==="week")return{k:"room",mood:"sad"};
+  if(id==="v9")return{k:"office",night:true,tired:true,phone:true};
+  if(id==="epilogue"){const ev=events(picks);return{k:ev[0].scene,mood:"happy"}}
+  if(id==="grade")return gradeInfo().g.g==="ㄅ"?{k:"room",mood:"happy"}:{k:"court"};
+  return{k:"office",night:false,writing:true};
+}
+function events(picks){
+  const ev=[]; const P=i=>picks[i];
+  if(P(9)===1)ev.push({sev:"bad",ic:"!",scene:"phone",h:"衛生局來電",t:"小安的家人得知她曾服藥，向衛生局投訴：心理師明明知道，卻沒有通報。紀錄上只寫著「個案情緒平穩」。"});
+  if(P(9)===3)ev.push({sev:"bad",ic:"!",scene:"phone",h:"衛生局來電",t:"紀錄清楚寫著你知道她服過藥，卻找不到任何通報或處置。知悉自殺行為，應在 24 小時內通報。"});
+  if(P(9)===2)ev.push({sev:"warn",ic:"?",scene:"court",h:"說不清楚的處置",t:"你明明有通報也有處理，但紀錄上一個字都沒有。調查時你說不清楚當時做了什麼。如果沒有記錄，治療就沒有發生。"});
+  if(P(4)===2||P(4)===3||P(4)===0)ev.push({sev:P(4)===0?"warn":"bad",ic:"!",scene:"court",h:"第 3 次晤談的風險紀錄",t:P(4)===2?"小安早在第 3 次晤談就提過想消失，紀錄卻一個字都沒寫。":P(4)===3?"紀錄只寫「情緒低落」，看不出她提過想消失，也看不出你做了什麼評估。":"紀錄寫了她說想消失，卻沒有評估和處置。被問到當時做了什麼，你答不出來。"});
+  if(P(6)===0||P(6)===2)ev.push({sev:"bad",ic:"!",scene:"court",h:"法庭上被唸出來",t:P(6)===0?"法院調閱紀錄，你寫在晤談紀錄裡的「對個案感到煩躁，疑似反移情」被當庭唸出來。":"歷程紀錄放在個案檔案裡，被一起調閱。你對個案的煩躁被當庭唸出來。"});
+  if(P(12)===2)ev.push({sev:"bad",ic:"!",scene:"phone",h:"當事人投訴",t:"小安向衛生局投訴：心理師拒絕讓她看自己的紀錄。當事人有權查閱，不得無故拒絕。"});
+  if(P(12)===1)ev.push({sev:"warn",ic:"?",scene:"room",h:"一個人讀紀錄",t:"小安一個人讀到「自殺」兩個字，更確定大家都覺得她有問題，差點不再來晤談。"});
+  if(P(12)===3)ev.push({sev:"warn",ic:"?",scene:"room",h:"沒被回答的疑問",t:"主管不了解晤談脈絡，答不出小安的問題。她覺得被丟下，信任關係受損。"});
+  if(P(11)===3)ev.push({sev:"bad",ic:"!",scene:"court",h:"修改舊紀錄",t:"主管發現舊紀錄有事後修改的痕跡。紀錄放進檔案後就不能竄改。"});
+  if(P(11)===0)ev.push({sev:"warn",ic:"!",scene:"phone",h:"日記被交出去",t:"你的個人歷程紀錄跟著檔案交給主管，裡面對個案的感受在機構裡被看見了。"});
+  if(P(11)===2)ev.push({sev:"warn",ic:"?",scene:"phone",h:"查核卡關",t:"衛生局抽查時，主管無法確認你的紀錄是否完整，整個機構跟著被要求改善。"});
+  if(P(3)===0)ev.push({sev:"warn",ic:"!",scene:"phone",h:"母親申請調閱",t:"小安的母親看到紀錄寫她「人格可能有問題」，非常生氣，揚言要投訴。"});
+  if(P(8)===0||P(8)===2)ev.push({sev:"warn",ic:"?",scene:"court",h:"被質疑竄改",t:P(8)===0?"紀錄上的立可白痕跡，被質疑事後竄改。":"少了一頁的紀錄，被質疑事後竄改。"});
+  if(P(0)===2)ev.push({sev:"warn",ic:"?",scene:"court",h:"兩週後才補寫",t:"調閱時發現紀錄是兩週後才補寫的，內容的可信度被打上問號。"});
+  if(P(0)===3)ev.push({sev:"warn",ic:"!",scene:"phone",h:"手機裡的個案資料",t:"你的手機記事本還留著小安的晤談重點。手機借朋友看照片時，差點被滑到。"});
+  if(!ev.length)ev.push({sev:"good",ic:"✓",scene:"room",h:"順利過關",t:"三個月後，有人申請調閱紀錄。你的紀錄清楚、客觀，有評估也有處置，只需要依程序回應。小安還在持續晤談，焦慮降到 4 分。"});
+  const rank={bad:0,warn:1,good:2};return ev.sort((a,b)=>rank[a.sev]-rank[b.sev]).slice(0,3);
+}
+
+/* ================= state ================= */
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fresh=()=>({epoch:Date.now(),step:0,sub:null,picks:[],tallies:[],tie:null,att:0,dl:0,rt:0,ta:0});
+const QS=new URLSearchParams(location.search);
+const ROOM=((QS.get("room")||"class").replace(/[^a-zA-Z0-9-]/g,"").slice(0,24))||"class";
+const WANT_HOST=QS.has("host");
+let S=fresh(), mode="connecting", isHost=false, stateRef=null, rdb=null, uid=null, players={}, votesNode={}, joined=false, subscribed=false, localWhy="";
+let connected=false, showLive=true, confirmRestart=false, myVote=null, manual={}, lastFresh=-1;
+function store(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+function load(k){try{const v=localStorage.getItem(k);return v?JSON.parse(v):null}catch(e){return null}}
+function sstore(k,v){try{sessionStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+function sload(k){try{const v=sessionStorage.getItem(k);return v?JSON.parse(v):null}catch(e){return null}}
+const toArr=x=>Array.isArray(x)?x:(x&&typeof x==="object"?Object.keys(x).reduce((a,k)=>{if(/^\d+$/.test(k))a[+k]=x[k];return a},[]):x);
+function normalize(d){
+  const n=fresh(); if(!d||typeof d!=="object")return n;
+  d={...d,picks:toArr(d.picks),tallies:toArr(d.tallies),tie:toArr(d.tie)};
+  if(Array.isArray(d.tallies))d.tallies=d.tallies.map(toArr);
+  if(typeof d.epoch==="number")n.epoch=d.epoch;
+  n.step=Number.isInteger(d.step)?Math.max(0,Math.min(STEPS.length-1,d.step)):0;
+  n.sub=["vote","tie","result"].includes(d.sub)?d.sub:null;
+  if(STEPS[n.step].type==="vote"&&!n.sub)n.sub="vote";
+  if(STEPS[n.step].type!=="vote")n.sub=null;
+  n.picks=Array.isArray(d.picks)?d.picks.slice(0,ROUNDS.length).map((x,i)=>Number.isInteger(x)&&x>=0&&x<ROUNDS[i].o.length?x:null):[];
+  n.tallies=Array.isArray(d.tallies)?d.tallies.slice(0,ROUNDS.length).map(a=>Array.isArray(a)?a.slice(0,4).map(x=>Number.isFinite(x)?x:0):null):[];
+  n.att=Number.isInteger(d.att)?d.att:0;
+  n.dl=Number.isFinite(d.dl)?d.dl:0;n.rt=Number.isFinite(d.rt)?d.rt:0;n.ta=d.ta?1:0;
+  n.tie=Array.isArray(d.tie)?d.tie.filter(x=>Number.isInteger(x)&&x>=0&&x<4):null;
+  return n;
+}
+const cur=()=>STEPS[S.step];
+const curRound=()=>cur().type==="vote"?cur().r:-1;
+function toast(m){const t=$("#toast");t.textContent=m;t.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>t.hidden=true,2600)}
+let writing=Promise.resolve();
+function commit(next){
+  S=normalize(next); render();
+  if(mode==="online"&&isHost&&stateRef){const b=JSON.parse(JSON.stringify(S));writing=writing.then(()=>stateRef.set(b)).catch(()=>toast("同步失敗：請確認網路，以及 Firebase 規則裡的主持人 email 是否正確"))}
+  else if(mode==="local")store("rg2-local",S);
+}
+const voteKey=()=>`${S.epoch}_${curRound()}_${S.att}`;
+function myVoteNow(){if(mode==="online"){const v=(votesNode[voteKey()]||{})[uid];return Number.isInteger(v)?v:null}return myVote&&myVote.e===S.epoch&&myVote.r===curRound()&&(myVote.a||0)===S.att?myVote.c:null}
+function isOver(){const r=curRound();return r>=0&&S.sub==="result"&&S.picks[r]!=null&&!!(ROUNDS[r].o[S.picks[r]]||{}).over}
+function onlineVotes(){const c=[0,0,0,0];let n=0;const vs=votesNode[voteKey()]||{};const ids=[];
+  for(const [id,v] of Object.entries(vs)){if(Number.isInteger(v)&&v>=0&&v<4){c[v]++;n++;ids.push(id)}}return{c,n,ids}}
+function liveCounts(){let c=[0,0,0,0];if(mode==="online")c=onlineVotes().c;else{const m=myVoteNow();if(m!=null)c[m]++}
+  const h=manual[curRound()]||[0,0,0,0];return c.map((x,i)=>x+h[i])}
+const viewersOnline=()=>Object.keys(players).length;
+const expectedVoters=()=>Object.keys(players).length;
+let auto=null,voteSecs=30;try{const v=+localStorage.getItem("rg-secs");if([20,30,45,60].includes(v))voteSecs=v}catch(e){}
+const autoOn=()=>auto===null?mode==="online":auto;
+const newDl=()=>autoOn()?Date.now()+voteSecs*1000:0;
+
+/* ================= actions ================= */
+function vote(i){if(cur().type!=="vote"||S.sub!=="vote")return;myVote={e:S.epoch,r:curRound(),c:i,a:S.att};
+  if(mode==="online"&&rdb&&uid){(votesNode[voteKey()]=votesNode[voteKey()]||{})[uid]=i;rdb.ref(`rooms/${ROOM}/votes/${voteKey()}/${uid}`).set(i).catch(()=>toast("投票沒送出，請再點一次"))}renderPanel();}
+function adjust(i,d){const r=curRound();const a=(manual[r]||[0,0,0,0]).slice();a[i]=Math.max(0,a[i]+d);manual[r]=a;renderPanel()}
+function goStep(n){const t=STEPS[n].type,sub=t==="vote"?(S.picks[STEPS[n].r]!=null?"result":"vote"):null;commit({...S,step:n,sub,tie:null,ta:0,dl:sub==="vote"?newDl():0,rt:sub==="result"?Date.now():0})}
+function closeVote(isAuto){
+  const s=cur(),r=s.r,n=ROUNDS[r].o.length,c=liveCounts().slice(0,n).concat([0,0,0,0]).slice(0,4),top=Math.max(...c.slice(0,n)),tied=c.slice(0,n).map((x,i)=>x===top?i:-1).filter(i=>i>=0);
+  const tallies=S.tallies.slice();tallies[r]=c;
+  if(top===0){if(isAuto){commit({...S,dl:Date.now()+15000});toast("還沒有人投票，延長 15 秒");return}commit({...S,sub:"tie",tallies,tie:[...Array(n).keys()]});return}
+  if(tied.length>1&&!autoOn()){commit({...S,sub:"tie",tallies,tie:tied});return}
+  const win=tied.length>1?tied[Math.floor(Math.random()*tied.length)]:tied[0];
+  const picks=S.picks.slice();picks[r]=win;lastFresh=r;commit({...S,sub:"result",tallies,picks,tie:null,rt:Date.now(),ta:tied.length>1?1:0});
+}
+function hostPrimary(){
+  const s=cur();
+  if(s.type==="vote"&&S.sub==="vote"){closeVote(false);return}
+  if(isOver()){const r=s.r,picks=S.picks.slice(),tallies=S.tallies.slice();picks[r]=null;tallies[r]=null;manual[r]=[0,0,0,0];commit({...S,sub:"vote",picks,tallies,tie:null,att:S.att+1,dl:newDl(),rt:0,ta:0});return}
+  if(S.step<STEPS.length-1)goStep(S.step+1);
+}
+function hostChoose(i){if(!(S.sub==="tie"&&S.tie&&S.tie.includes(i)))return;const r=curRound();const picks=S.picks.slice();picks[r]=i;lastFresh=r;commit({...S,sub:"result",picks,tie:null,rt:Date.now(),ta:0})}
+let allAt=0;
+setInterval(()=>{
+  const now=Date.now(),cd=document.getElementById("cd");
+  if(cd){const left=S.dl&&S.sub==="vote"?Math.max(0,Math.ceil((S.dl-now)/1000)):null;cd.textContent=left==null?"":`⏱ ${left} 秒`;cd.classList.toggle("low",left!=null&&left<=5)}
+  if(!isHost||mode==="connecting"||!autoOn())return;
+  const s=cur();
+  if(s.type==="vote"&&S.sub==="vote"){
+    if(!S.dl){commit({...S,dl:newDl()});return}
+    const ex=expectedVoters(),n=mode==="online"?onlineVotes().n:0;
+    if(ex>0&&n>=ex){if(!allAt)allAt=now}else allAt=0;
+    if(now>=S.dl||(allAt&&now-allAt>=2000)){allAt=0;closeVote(true)}
+    return;
+  }
+  if(s.type==="vote"&&S.sub==="result"){if(!S.rt){commit({...S,rt:now});return}if(now-S.rt>=(isOver()?12000:5000))hostPrimary();return}
+  if(!dlgDone)return;
+  const wait=s.type==="story"?Math.max(6000,dlgLen*90):s.type==="epilogue"?15000:s.type==="grade"?10000:null;
+  if(wait!=null&&now-dlgDoneAt>=wait)hostPrimary();
+},500);
+function hostBack(){if(S.step>0)goStep(S.step-1)}
+function restart(){
+  if(!confirmRestart){confirmRestart=true;renderHostbar();setTimeout(()=>{confirmRestart=false;renderHostbar()},4000);return}
+  confirmRestart=false;manual={};myVote=null;commit(fresh());
+}
+
+/* ================= scoring ================= */
+function gradeInfo(){
+  const sc=S.picks.reduce((s,p,i)=>s+(p!=null&&ROUNDS[i]&&!ROUNDS[i].unscored?ROUNDS[i].o[p].p:0),0);
+  let gi=GRADES.findIndex(g=>sc>=g.min);
+  const fatal=[4,9].some(i=>S.picks[i]!=null&&ROUNDS[i].o[S.picks[i]].p===0);
+  const unrec=S.picks[9]!=null&&ROUNDS[9].o[S.picks[9]].p===1;
+  let capped=null;
+  if(fatal&&gi<2){gi=2;capped="風險處置出現重大失誤（不寫、沒評估就下結論，或沒有通報），等級最高只到ㄇ。"}
+  else if(unrec&&gi<1){gi=1;capped="有通報、有處理，卻沒有寫進紀錄，等級最高只到ㄆ。"}
+  return{sc,g:GRADES[gi],capped};
+}
+const markOf=p=>p===3?["g","✓ 好"]:p>=1?["w","△ 待修"]:["b","✗ 有風險"];
+
+/* ================= pixel scenes ================= */
+const cv=$("#cv"),cx=cv.getContext("2d"),W=192,H=108;
+const R=(x,y,w,h,c)=>{cx.fillStyle=c;cx.fillRect(x|0,y|0,w|0,h|0)};
+const SPR={
+ T:["...hhhh...","..hhhhhh..",".hhhhhhhh.",".hssssssh.",".sesssses.",".ssssssss.","..ssmmss..","...ssss...",".cccwwccc.","ccccwwcccc","ccccwbcccc","sccccccccs","sccccccccs",".pppppppp.",".ppp..ppp.",".kk....kk."],
+ A:["...hhhh...","..hhhhhh..",".hhhhhhhh.","hhsssssshh","hsessssesh","hssssssssh","hhssmmsshh","h..ssss..h",".yyyyyyyy.","yyyyyyyyyy","yyyyyyyyyy","syyyyyyyys","syyyyyyyys",".jjjjjjjj.",".jjj..jjj.",".kk....kk."]
+};
+const PAL={h:"#2B2233",s:"#F2C7A5",e:"#1B1B24",m:"#B9564F",c:"#3F8F86",w:"#F4EFE6",b:"#F2C14E",p:"#33384D",k:"#1D1F2B",y:"#E0A93B",j:"#5B6FA8"};
+function spr(n,x,y,sc=2,pal={}){const rows=SPR[n];for(let r=0;r<rows.length;r++)for(let c=0;c<rows[r].length;c++){const ch=rows[r][c];if(ch!==".")R(x+c*sc,y+r*sc,sc,sc,pal[ch]||PAL[ch])}}
+function glyph(x,y,ch,col){const G={Z:["111","001","010","100","111"],"!":["1","1","1","0","1"],"♪":["011","010","010","110","110"]};
+  const g=G[ch];if(!g)return;g.forEach((row,i)=>[...row].forEach((v,j)=>{if(v==="1")R(x+j,y+i,1,1,col)}))}
+function bubble(x,y,w,h){R(x,y,w,h,"#F4EFE6");R(x-1,y+1,1,h-2,"#F4EFE6");R(x+w,y+1,1,h-2,"#F4EFE6");R(x+2,y+h,2,2,"#F4EFE6")}
+function clock(x,y,time){R(x,y,15,15,"#2B2233");R(x+1,y+1,13,13,"#ECE5D2");const [hh,mm]=(time||"9:00").split(":").map(Number);
+  const cxp=x+7,cyp=y+7;const a=((hh%12)+mm/60)/12*Math.PI*2,b=mm/60*Math.PI*2;
+  for(let i=1;i<=3;i++)R(cxp+Math.round(Math.sin(a)*i),cyp-Math.round(Math.cos(a)*i),1,1,"#2B2233");
+  for(let i=1;i<=5;i++)R(cxp+Math.round(Math.sin(b)*i),cyp-Math.round(Math.cos(b)*i),1,1,"#B9564F");R(cxp,cyp,1,1,"#2B2233")}
+function office(t,o,hud){
+  const night=o.night;
+  R(0,0,W,78,night?"#283253":"#C9D6CE");R(0,66,W,12,night?"#323D63":"#AFC1B6");R(0,65,W,1,night?"#1E2643":"#93A79B");
+  R(0,78,W,30,night?"#3B2F2B":"#7A5E4B");for(let x=0;x<W;x+=18)R(x,78,1,30,night?"#2F2522":"#6A5040");
+  R(12,10,54,42,"#1A1F30");R(14,12,50,38,night?"#0E1531":"#9ED3EE");
+  if(night){R(50,16,7,7,"#F3E9B5");R(53,15,5,6,"#0E1531");
+    [[20,16],[30,20],[42,14],[24,28],[58,30],[36,26]].forEach(([x,y],i)=>{if((t+i*2)%7<5)R(x,y,1,1,"#F3E9B5")});
+    [[14,36,8,14],[23,32,9,18],[33,38,7,12],[41,30,10,20],[52,36,12,14]].forEach(([x,y,w,h],i)=>{R(x,y,w,h,"#1D2547");for(let yy=y+2;yy<y+h-1;yy+=3)for(let xx=x+2;xx<x+w-1;xx+=3)if(((xx+yy+i)*7)%5<2)R(xx,yy,1,1,"#F2C14E")})}
+  else{const cxo=(t>>2)%40;R(16+cxo,18,12,4,"#FFFFFF");R(18+cxo,16,7,2,"#FFFFFF");R(14,40,50,10,"#7FB27A")}
+  R(38,12,2,38,"#1A1F30");R(14,30,50,2,"#1A1F30");
+  clock(150,14,hud.time);
+  R(100,16,26,18,"#E8E0C8");R(102,18,22,14,"#F6F1E2");R(105,21,16,1,"#9CA1B9");R(105,24,12,1,"#9CA1B9");R(110,27,6,3,"#D9483B");
+  spr("T",100,40,2,o.tired?{m:"#8C6A5A"}:{});
+  if(o.tired&&!o.phone){const z=(t>>1)%10;glyph(124,30-z,"Z","#F4EFE6");if(z>4)glyph(130,24-z,"Z","#F4EFE6")}
+  R(54,72,100,6,"#8A5C3A");R(54,78,100,22,"#6B4529");R(58,82,40,1,"#5A3922");R(110,82,40,1,"#5A3922");R(98,84,12,6,"#5A3922");
+  R(62,50,32,22,"#1C1F2B");R(64,52,28,17,o.writing?"#DFF3EC":"#4FA393");
+  if(o.writing){const n=t%40,chars=n*3;for(let l=0;l<5;l++){const len=Math.max(0,Math.min(22,chars-l*22));if(len>0)R(66,54+l*3,len,1,"#3F5A55")}
+    const line=Math.min(4,Math.floor(chars/22)),col=Math.min(22,chars-line*22);if(t%4<2)R(66+col,53+line*3,1,3,"#1C1F2B")}
+  R(66,70,24,2,"#2B2E3D");
+  R(126,66,7,6,"#E6E1D3");R(133,67,2,3,"#E6E1D3");const st=t%8;R(128+(st%2),62-(st>>1),1,1,"#ECE7DA");R(130-(st%2),60-(st>>1),1,1,"#ECE7DA");
+  if(o.boss){spr("T",22,52,2,{h:"#9A9AA2",c:"#2E3A66",w:"#F4EFE6",b:"#F2C14E"});R(40,70,8,10,"#E6D28F");if(t%6<4){bubble(36,40,7,9);glyph(39,42,"!","#2E3A66")}}
+  if(o.phone){const sh=t%2?1:-1;R(138+sh,66,10,6,"#D9483B");R(139+sh,67,8,2,"#F27D6C");if(t%4<2){R(150,62,1,3,"#F4EFE6");R(153,60,1,5,"#F4EFE6")}bubble(122,22,7,9);glyph(125,24,"!","#D9483B")}
+}
+function roomScene(t,o){
+  const happy=o.mood==="happy";
+  R(0,0,W,80,happy?"#E9D8B8":"#CDB99A");R(0,72,W,8,happy?"#D7C29E":"#B9A483");R(0,80,W,28,"#6E5545");
+  R(36,84,120,20,happy?"#C46A4E":"#9C5A46");R(40,87,112,14,happy?"#D98A63":"#B06E55");
+  R(136,10,42,30,"#5B4636");R(138,12,38,26,happy?"#BDE6F7":"#A7C7D6");R(156,12,2,26,"#5B4636");if(happy)R(142,16,6,6,"#FFE48A");
+  R(14,58,12,14,"#8A5C3A");R(16,40,2,18,"#3E7A4E");R(12,38,8,8,"#4E9A5F");R(18,34,8,8,"#58A869");R(10,46,8,6,"#3E7A4E");
+  if(happy){R(14,36,2,2,"#F27D6C");R(22,34,2,2,"#F2C14E");R(12,46,2,2,"#F27D6C")}
+  R(30,48,30,20,"#4F7A63");spr("T",34,40,2);R(28,66,34,12,"#5E8F74");R(28,62,4,16,"#4F7A63");R(58,62,4,16,"#4F7A63");
+  R(132,48,30,20,"#8E5462");if(o.mood!=="gone")spr("A",136+(o.mood==="angry"?(t%2?1:-1):0),40+(o.mood==="sad"&&t%8<4?1:0),2,o.mood==="sad"||o.mood==="angry"?{m:"#8C6A5A"}:{});R(130,66,34,12,"#A2626F");R(130,62,4,16,"#8E5462");R(160,62,4,16,"#8E5462");
+  R(84,70,24,4,"#8A5C3A");R(88,74,2,10,"#6B4529");R(102,74,2,10,"#6B4529");R(90,64,10,6,"#E8EEF3");R(94,62,2,2,"#FFFFFF");
+  if(o.mood==="gone")return;
+  bubble(156,26,11,8);
+  if(happy)glyph(160,27,"♪","#D9483B");else if(o.mood==="angry"){if(t%4<3){glyph(161,27,"!","#D9483B");glyph(164,27,"!","#D9483B")}}else for(let i=0;i<3;i++)if((t>>1)%4>i)R(158+i*3,30,1,1,"#2B2233");
+}
+function court(t){
+  R(0,0,W,108,"#4A3226");for(let x=6;x<W;x+=22)R(x,0,2,60,"#3D281E");R(0,60,W,48,"#5E4232");
+  R(84,2,24,12,"#C9A55A");R(86,4,20,8,"#8A6A2E");R(95,5,2,6,"#E8D7A8");R(91,7,10,1,"#E8D7A8");
+  spr("T",86,14,2,{h:"#BFC3CC",c:"#16161D",w:"#F4EFE6",b:"#16161D"});
+  R(36,38,120,24,"#7B4B2F");R(36,38,120,3,"#9A6440");R(40,44,112,1,"#6A3F27");
+  const g=t%10<2?2:0;R(118,32+g,10,4,"#5A3922");R(122,36+g,2,3,"#5A3922");
+  spr("T",86,70,2);R(106,86,9,11,"#E6D28F");R(107,88,7,1,"#9C8A4C");R(107,90,7,1,"#9C8A4C");
+  if(t%6<4){bubble(110,60,7,9);glyph(113,62,"!","#D9483B")}
+}
+function street(t){
+  R(0,0,W,108,"#141B3A");
+  [[8,6],[40,12],[70,4],[120,10],[160,6],[182,14]].forEach(([x,y],i)=>{if((t+i)%6<4)R(x,y,1,1,"#F3E9B5")});
+  const far=(t*1)%64;
+  for(let k=-1;k<5;k++){const bx=k*64-far;[[0,30,20,40],[22,22,16,48],[40,36,22,34]].forEach(([x,y,w,h],j)=>{R(bx+x,y,w,h,"#222B52");for(let yy=y+3;yy<y+h-2;yy+=4)for(let xx=bx+x+2;xx<bx+x+w-2;xx+=4)if(((xx+far+yy+j)*13)%7<3)R(xx,yy,2,2,"#F2C14E")})}
+  R(0,70,W,6,"#2E3557");R(0,76,W,32,"#3A3F55");for(let x=-((t*3)%24);x<W;x+=24)R(x,90,12,2,"#C9C3AE");
+  for(let k=-1;k<4;k++){const lx=k*70-((t*2)%70)+30;R(lx,34,2,42,"#5A6078");R(lx-4,32,10,3,"#5A6078");R(lx-3,35,8,2,"#FFE7A0");R(lx-10,38,22,30,"rgba(255,231,160,.08)")}
+  const leg=(t%4<2);spr("T",86,44+(leg?0:1),2,{m:"#8C6A5A"});
+  R(86,76,20,4,"#3A3F55");if(leg){R(88,74,4,4,"#1D1F2B");R(100,72,4,4,"#1D1F2B")}else{R(90,72,4,4,"#1D1F2B");R(98,74,4,4,"#1D1F2B")}
+  R(104,64,8,9,"#6B4529");R(105,62,6,2,"#6B4529");
+}
+function home(t,o){
+  R(0,0,W,80,"#3A2F4A");R(0,72,W,8,"#33293F");R(0,80,W,28,"#5A4636");for(let x=0;x<W;x+=20)R(x,80,1,28,"#4C3A2D");
+  R(10,10,40,30,"#231C30");R(12,12,36,26,"#0E1531");R(29,12,2,26,"#231C30");if(t%7<5)R(18,18,1,1,"#F3E9B5");R(40,16,4,4,"#F3E9B5");
+  R(60,14,8,14,"#2B2233");R(56,28,16,2,"#2B2233");
+  const ch=Math.floor(t/12)%4;
+  R(146,40,40,26,"#15151C");const tvc=["#5B8BD9","#D97A5B","#6CCB8F","#C99BE0"][ch];R(148,42,36,20,(t%3===0)?"#2A3152":tvc);R(162,66,8,6,"#15151C");R(150,72,32,4,"#6B4529");
+  R(110,60,30,40,"rgba(120,150,230,.06)");
+  R(24,52,84,16,"#7A4E6E");R(20,48,8,30,"#6A4260");R(104,48,8,30,"#6A4260");
+  spr("T",52,40+(o.low&&t%10<5?1:0),2,o.low?{m:"#8C6A5A"}:{});
+  R(22,66,90,14,"#8A5A7C");R(24,64,86,4,"#7A4E6E");
+  if(ch===0||ch===2){R(76,58,4,6,"#2B2E3D");R(77,59,2,4,"#BFE3FF");R(70,52,16,10,"rgba(191,227,255,.10)")}
+  R(116,80,28,4,"#8A5C3A");R(120,84,2,10,"#6B4529");R(138,84,2,10,"#6B4529");R(124,76,10,4,"#E6E1D3");R(125,75,8,1,"#C46A4E");
+  const st=t%8;R(127+(st%2),72-(st>>1),1,1,"#ECE7DA");R(131-(st%2),70-(st>>1),1,1,"#ECE7DA");
+  if(o.low){const z=(t>>1)%10;glyph(80,30-z,"Z","#F4EFE6")}
+}
+let tick=0;
+function draw(){
+  const sc=sceneFor(S.step,S.picks),hud=hudFor(S.step,S.picks);
+  if(sc.k==="office")office(tick,sc,hud);else if(sc.k==="room")roomScene(tick,sc);else if(sc.k==="court")court(tick);else if(sc.k==="street")street(tick);else if(sc.k==="home")home(tick,sc);else office(tick,{night:false,phone:true},{time:"10:00"});
+}
+const reduce=!!(window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches);
+setInterval(()=>{if(!reduce){tick++;draw()}},150);
+
+/* ================= render ================= */
+function render(){document.body.classList.toggle("host",isHost);renderStatus();renderHud();renderDialog();updateCaret();renderPanel();renderRecord();renderHostbar();draw()}
+function renderStatus(){
+  const role=mode==="connecting"?"連線中…":isHost?(mode==="local"?"主持人 · 單機模式":"主持人"):(myName?"玩家："+esc(myName):"玩家");
+  let h=`<span class="chip role">${role}</span>`;
+  if(mode==="online")h+=`<span class="chip"><span class="dot ${connected?"on":""}"></span>線上 ${viewersOnline()} 人</span><span class="chip">房間 ${esc(ROOM)}</span>`;
+  $("#status").innerHTML=h;
+}
+function renderHud(){
+  const h=hudFor(S.step,S.picks);
+  $("#hud").innerHTML=`<div class="hudbox"><span>心理師</span> <span class="px">LV.3</span>
+    <div class="hpbar"><span class="px">HP</span><div class="track"><div class="fill ${h.hp<=15?"low":""}" style="width:${h.hp}%"></div></div><span class="px">${h.hp}%</span></div>
+    <div class="hpbar"><span class="px">$&nbsp;</span><div class="track"><div class="fill money ${h.money<=15?"low":""}" style="width:${h.money}%"></div></div><span class="px">${h.money<=15?"窮":"OK"}</span></div></div>
+    <div class="hudbox clock"><div>${esc(h.day)}</div><div class="px">${esc(h.time)}</div></div>`;
+}
+let dlgKey=null,dlgTimer=null,dlgSkip=null;
+function dialogFor(){
+  const s=cur();
+  if(s.type==="lobby")return[N("歡迎來到晴光社區心理諮商所。"),N("今晚，你就是這裡的心理師。每一個決定，都由全班投票。")];
+  if(s.type==="story")return storyLines(s.id,S.picks);
+  if(isOver()){const o=ROUNDS[s.r].o[S.picks[s.r]];return[N(o.over),N("GAME OVER：信任歸零。")]}
+  if(s.type==="vote"){const r=ROUNDS[s.r];return[N(typeof r.ctx==="function"?r.ctx(S.picks):r.ctx),{who:r.id==="load"?"主管":"心理師",t:r.q,q:true}]}
+  if(s.type==="epilogue")return[N("三個月後……"),N("小安的紀錄被申請調閱了。你當初寫下的每一句，現在都會被仔細讀過。")];
+  if(s.type==="grade"){const g=gradeInfo().g;return[N("這份紀錄的等級出爐了。"),N(`${g.g} 級：${g.t}。`)]}
+  return[N("最後，一起看看ㄅ級的紀錄長什麼樣子。")];
+}
+function renderDialog(){
+  const key=S.epoch+":"+S.step+":"+S.picks[0]+":"+S.picks[10]+":"+S.att+":"+(isOver()?"over":"");
+  if(key===dlgKey)return;dlgKey=key;
+  const lines=dialogFor(),el=$("#dlg");clearTimeout(dlgTimer);
+  dlgDone=false;dlgLen=lines.reduce((a,l)=>a+l.t.length,0);
+  el.innerHTML=lines.map(l=>`<p class="ln ${l.q?"q":""}"><span class="who ${l.who==="旁白"?"n":""}">${l.who==="旁白"?"▸":esc(l.who)}</span><span class="tx"></span></p>`).join("")+`<span class="caret" hidden>▼ 繼續</span>`;
+  const txs=[...el.querySelectorAll(".tx")],lns=[...el.querySelectorAll(".ln")],caret=el.querySelector(".caret");let li=0,ci=0;
+  lns.forEach((l,i)=>{if(i>0)l.style.visibility="hidden"});
+  const finish=()=>{clearTimeout(dlgTimer);txs.forEach((t,i)=>{t.textContent=lines[i].t;lns[i].style.visibility=""});dlgDone=true;dlgDoneAt=Date.now();updateCaret()};
+  dlgSkip=finish;if(reduce){finish();return}
+  const step=()=>{
+    if(li>=lines.length){dlgDone=true;dlgDoneAt=Date.now();updateCaret();return}
+    lns[li].style.visibility="";ci++;txs[li].textContent=lines[li].t.slice(0,ci);
+    if(ci>=lines[li].t.length){li++;ci=0;dlgTimer=setTimeout(step,450)}else dlgTimer=setTimeout(step,32);
+  };
+  step();
+}
+let dlgDone=false,dlgDoneAt=0,dlgLen=0;
+const canAdvance=()=>isHost&&mode!=="connecting"&&cur().type!=="ideal"&&!(cur().type==="vote"&&S.sub!=="result");
+function updateCaret(){const el=$("#dlg"),c=el.querySelector(".caret");const on=dlgDone&&canAdvance();if(c){c.hidden=!on;c.textContent=autoOn()&&cur().type!=="lobby"?"▼ 繼續（自動）":"▼ 繼續"}el.classList.toggle("adv",on)}
+function dlgAct(){if(!dlgDone){dlgSkip&&dlgSkip();return}if(canAdvance())hostPrimary()}
+$("#dlg").addEventListener("click",dlgAct);
+$("#dlg").addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();dlgAct()}});
+
+function optMenu({clickable,showCounts,counts,win,tie}){
+  const r=ROUNDS[curRound()],mine=myVoteNow(),total=counts?counts.reduce((a,b)=>a+b,0):0;
+  return `<div class="menu">${r.o.map((o,i)=>{
+    const cls=["opt"];if(mine===i&&S.sub==="vote")cls.push("mine");if(win!=null)cls.push(i===win?"win":"lose");if(tie&&tie.includes(i))cls.push("tie");
+    const pct=showCounts&&total?Math.round(counts[i]/total*100):0;
+    const n=showCounts?`<span class="n">${counts[i]} 票${total?` · ${pct}%`:""}</span>`:"";
+    const tg=win===i?`<span class="tag">${r.unscored?"決定":"寫進紀錄"}</span>`:(mine===i&&S.sub==="vote"?`<span class="tag">你的選擇</span>`:"");
+    return `<button class="${cls.join(" ")}" data-opt="${i}" ${clickable?"":"disabled"} aria-pressed="${mine===i}">${showCounts?`<span class="bar" style="width:${pct}%"></span>`:""}<span class="L">${LETTERS[i]}</span><span class="T">${esc(o.t)}${tg}${n}</span></button>`}).join("")}</div>`;
+}
+let AVA="";
+try{const c=document.createElement("canvas");c.width=40;c.height=40;const g=c.getContext("2d");g.fillStyle="#22305E";g.fillRect(0,0,40,40);
+  SPR.A.slice(0,10).forEach((row,r)=>[...row].forEach((ch,k)=>{if(ch!=="."){g.fillStyle=PAL[ch];g.fillRect(k*4,r*4,4,4)}}));AVA=c.toDataURL()}catch(e){}
+function profileBox(open){
+  return `<details class="box prof" ${open?"open":""}><summary>小安的個案資料</summary><div class="prof-in">${AVA?`<img class="ava" src="${AVA}" alt="小安的像素頭像" width="64" height="64">`:""}<dl>${PROFILE.map(([k,v])=>`<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl></div></details>`;
+}
+let sheetKind=null;
+function tools(list){const L={profile:"小安的資料",facts:"晤談重點",record:"看紀錄表"};
+  return `<div class="tools">${list.map(k=>`<button class="tool ${k==="record"?"m-only":""}" data-sheet="${k}">${L[k]}</button>`).join("")}</div>`}
+function openSheet(k){sheetKind=k;renderSheet()}
+function renderSheet(){const w=$("#sheet");if(!sheetKind){w.hidden=true;w.innerHTML="";return}
+  const T={profile:"小安的個案資料",facts:"回想：第 3 次晤談的重點",record:"個案紀錄表"};
+  let body="";
+  if(sheetKind==="profile")body=profileBox(true).replace("<details","<div").replace("</details>","</div>").replace(/<summary>.*?<\/summary>/,"");
+  if(sheetKind==="facts")body=`<ul class="facts">${FACTS.map(f=>`<li>${esc(f)}</li>`).join("")}</ul>`;
+  if(sheetKind==="record")body=`<div class="record">${recordHTML()}</div>`;
+  w.hidden=false;w.innerHTML=`<div class="sheet" role="dialog" aria-label="${T[sheetKind]}"><div class="sheet-h"><b>${T[sheetKind]}</b><button class="ghost" data-close="1">關閉</button></div>${body}</div>`;
+}
+$("#sheet").addEventListener("click",e=>{if(e.target.id==="sheet"||e.target.closest("[data-close]")){sheetKind=null;renderSheet()}});
+document.addEventListener("click",e=>{const t=e.target.closest("[data-sheet]");if(t)openSheet(t.dataset.sheet)});
+function soapBar(r){const code=ROUNDS[r].code;if(!code||r<1||r>8)return"";const N2={S:"主觀陳述",O:"客觀觀察",A:"評估",P:"計畫"};
+  return `<div class="soap">${["S","O","A","P"].map(L=>{const rs=ROUNDS.map((x,i)=>i).filter(i=>i>=1&&i<=8&&!ROUNDS[i].cut&&ROUNDS[i].code===L);
+    const done=rs.every(i=>S.picks[i]!=null)&&L!==code;return `<b class="${L===code?"now":done?"done":""}">${L}</b>`}).join("")}<span>SOAP：現在寫 ${code}（${N2[code]}）</span></div>`}
+function renderPanel(){
+  const el=$("#panel"),s=cur();let h="";
+  if(mode==="connecting"){el.innerHTML=`<div class="wait"><span class="pulse"></span>正在連線…</div>`;return}
+  if(s.type==="lobby"){
+    h=`<div class="box"><h3>怎麼玩</h3><ol class="steps">
+      <li>先熬過一整天、寫好小安第 3 次晤談的紀錄；接著主管要查紀錄、小安要看紀錄，最後還有一個更難的決定。</li>
+      <li>遇到選擇時大家投票，最高票的做法會直接寫進右邊的紀錄。</li>
+      <li>共 ${VOTE_ORDER.length} 個選擇，第一個是今天要接幾位個案。最後看看三個月後發生什麼事，以及這份紀錄拿到ㄅ、ㄆ、ㄇ、ㄈ哪一級。</li></ol></div>`+profileBox(true);
+    h+=isHost?(mode==="online"?`<div class="box"><h3>已加入 ${viewersOnline()} 人</h3><div class="names">${Object.values(players).map(p=>`<span>${esc(p.name||"？")}</span>`).join("")||`<span>還沒有人加入</span>`}</div></div><p class="sub">同學用不含 ?host 的網址打開、輸入暱稱就會出現在上面。準備好就點對話框右下角的 ▼ 開始。</p>`:`<p class="sub">${esc(localWhy)}目前是單機模式：沒有線上投票，請用「現場舉手計票」幫每個選項計票。</p>`):`<div class="wait"><span class="pulse"></span>等主持人開始…</div>`;
+  }
+  else if(s.type==="story"){
+    h=(isHost?`<p class="hint">點對話框跳過打字，讀完點右下角的 ▼ 繼續。</p>`:`<div class="wait"><span class="pulse"></span>故事進行中，等主持人繼續…</div>`)+tools(["profile","record"]);
+  }
+  else if(s.type==="vote"){
+    const r=s.r,eb=`<div class="eyebrow">${S.sub==="vote"?`<span class="cd" id="cd"></span>`:""}選擇 ${VOTE_ORDER.indexOf(r)+1} / ${VOTE_ORDER.length} · ${ROUNDS[r].unscored?"":"紀錄欄位："}${esc(ROUNDS[r].k)}${ROUNDS[r].code?`（${ROUNDS[r].code}）`:""}</div>`;
+    if(S.sub==="vote"){
+      const ov=mode==="online"?onlineVotes().n:(myVoteNow()!=null?1:0);
+      h=eb+soapBar(r)+optMenu({clickable:true,showCounts:true,counts:liveCounts()});
+      if(isHost){const m=manual[r]||[0,0,0,0];
+        h+=`<div class="box"><h3>現場舉手計票</h3><p class="sub" style="margin-bottom:8px">沒上線的同學舉手，你在這裡加票，會和線上票數合併。</p><div class="hands">${LETTERS.slice(0,ROUNDS[r].o.length).map((L,i)=>`<div class="hand"><b>${L}</b><div class="row"><button class="mini" data-adj="${i}:-1" aria-label="${L} 減一票">−</button><span>${m[i]}</span><button class="mini" data-adj="${i}:1" aria-label="${L} 加一票">＋</button></div></div>`).join("")}</div></div>
+        <p class="sub">已收到 ${ov} 張線上票${showLive?"":"（票數先藏起來，避免大家跟風）"}</p>`+(mode==="online"?`<div class="names">${Object.entries(players).map(([id,p])=>`<span class="${onlineVotes().ids.includes(id)?"voted":""}">${esc(p.name||"？")}</span>`).join("")}</div>`:"");
+      } else h+=`<p class="sub">${myVoteNow()!=null?"已投票，可以改選。時間到或大家都投完，就由最高票當選。":"點一個選項投票，最高票的會寫進紀錄。"} · 已有 ${ov} 人投票</p>`;
+      h+=tools(r>=1&&r<=8?["facts","profile","record"]:["profile","record"]);
+    } else if(S.sub==="tie"){
+      const c=S.tallies[r]||[0,0,0,0];
+      h=eb+`<p class="sub" style="color:var(--warn)">${c.every(x=>x===0)?"這題還沒有人投票。":"平手！"}${isHost?"請主持人點一個選項。":"等主持人決定。"}</p>`+optMenu({clickable:isHost,showCounts:true,counts:c,tie:S.tie});
+    } else {
+      h=eb+soapBar(r)+optMenu({clickable:false,showCounts:true,counts:S.tallies[r]||[0,0,0,0],win:S.picks[r]})+tools(["record"])+(S.ta?`<p class="sub" style="color:var(--warn)">平手！由系統抽籤決定。</p>`:"")+(isOver()?`<div class="gameover"><div class="go-t">GAME OVER</div><div class="go-s">信任歸零</div><p>${esc(ROUNDS[r].why)}</p><p class="sub">${isHost?"按下方「回到這一題重選」，全班再投一次。":"等主持人帶大家回到這一題重選。"}</p></div>`:ROUNDS[r].gate?`<p class="sub">你守住了小安的信任，遊戲繼續。這一題不計分。</p>`:ROUNDS[r].unscored?`<p class="sub">這一題不計分，但會影響你今天的體力和錢包。</p>`:`<p class="sub">選項 ${LETTERS[S.picks[r]]} 已寫進紀錄。這樣寫好不好？到最後再揭曉。</p>`);
+    }
+  }
+  else if(s.type==="epilogue"){
+    h=`<div class="eyebrow">三個月後</div><div class="events">${events(S.picks).map((e,i)=>`<div class="ev ${e.sev}" style="animation-delay:${i*.6}s"><span class="ic">${esc(e.ic)}</span><div><h4>${esc(e.h)}</h4><p>${esc(e.t)}</p></div></div>`).join("")}</div>`;
+  }
+  else if(s.type==="grade"){
+    const {sc,g,capped}=gradeInfo();
+    h=`<div class="gradebox"><div class="seal big stamp" aria-label="等級 ${g.g}">${g.g}</div><div style="display:grid;gap:6px"><h2 class="q">${g.g} 級：${esc(g.t)}</h2><p class="sub" style="font-size:16px">${esc(g.d)}</p><div class="score"><b>${sc}</b> / ${MAX}</div></div></div>
+    ${capped?`<p class="capnote">${capped}</p>`:""}
+    <div class="scale">${GRADES.map((x,i)=>`<div class="${x===g?"on":""}"><b>${x.g}</b>${x.min}–${i===0?MAX:GRADES[i-1].min-1} 分</div>`).join("")}</div>
+    ${tools(["record"])}<p class="sub">紀錄表已經標出每一欄寫得如何。${isHost?"按「看ㄅ級版本」揭曉標準寫法。":"等主持人揭曉ㄅ級版本。"}</p>`;
+  }
+  else{
+    h=`<div class="eyebrow">ㄅ級版本 · 逐欄對照</div><div class="cmp">`;
+    VOTE_ORDER.forEach(i=>{const r=ROUNDS[i];if(r.unscored)return;const pk=S.picks[i],best=r.o.findIndex(o=>o.p===3),our=pk!=null?r.o[pk]:null,[mc,ml]=our?markOf(our.p):["b","未作答"];
+      h+=`<div class="ci"><h4>${esc(r.k)}${r.code?`（${r.code}）`:""}<span class="mark ${mc}">${ml}</span></h4><div class="two">${pk===best?"":`<div class="ours"><small>我們寫的（${pk!=null?LETTERS[pk]:"—"}）</small>${our?(our.r||esc(our.t)):"—"}</div>`}<div class="best"><small>ㄅ級寫法（${LETTERS[best]}）</small>${r.o[best].r||esc(r.o[best].t)}</div></div><p class="why">${esc(r.why)} <cite>${esc(r.src)}</cite></p></div>`});
+    h+=`</div><div class="box fullnote"><h3>整份ㄅ級晤談紀錄（進展紀錄）・第 3 次晤談</h3><p class="note">個案表示本週有 3 晚躺床超過 1 小時才入睡。個案每天以 1 到 10 分記錄焦慮程度（1 為完全不焦慮，10 為難以忍受），本週多在 7 分，上週為 8 分。個案遲到 15 分鐘，語速快，晤談中看手機 3 次。個案表示與母親同住，近期因換工作的決定與母親爭執，談及此事時哭泣。據個案表示，其精神科醫師診斷為失眠症，目前服用助眠藥物。個案提到「有時覺得消失也沒關係」；經評估無具體計畫、無工具、無自傷史，無立即危險。個案不希望他人知道，評估後暫不通知家屬，並已說明保密例外；已擬定安全計畫並提供 1925 安心專線。計畫：維持每週 1 次晤談；下次練習腹式呼吸，追蹤睡眠紀錄與安全計畫執行情形。</p><p class="why">寫法參考 Corey 等（2024）頁 172 的進展紀錄範例：當事人陳述 → 觀察 → 用量尺看變化 → 評估與處置 → 下次計畫，全部是看得到、可追蹤的事實。</p></div><div class="box"><h3>帶走一句話</h3><p style="margin:0;font-family:var(--serif);font-size:17px">下筆前先想：如果法官和個案都會讀到這句，我還會這樣寫嗎？</p></div><div class="box refs"><h3>參考文獻</h3><p>林家興（2023）。<i>諮商專業倫理：臨床應用與案例分析</i>。心理出版社。</p><p>修慧蘭、林蔚芳、洪莉竹、王淳弘（譯）（2024）。<i>專業助人工作倫理</i>（第三版）。雙葉書廊。原著：Corey, G., Corey, M. S., &amp; Callanan, P. <i>Issues &amp; ethics in the helping professions</i> (11th ed.).</p></div>`;
+  }
+  el.innerHTML=h;
+}
+function recordHTML(){
+  const s=cur(),marks=s.type==="grade"||s.type==="ideal",gi=gradeInfo(),P=i=>S.picks[i];
+  const isNow=i=>s.type==="vote"&&s.r===i&&S.sub!=="result";
+  const val=(i,blank)=>{const r=ROUNDS[i],pk=P(i);
+    if(pk!=null&&!isNow(i)){const o=r.o[pk],[mc,ml]=markOf(o.p);return `<span class="ent ${lastFresh===i&&s.type==="vote"&&s.r===i&&S.sub==="result"?"fresh":""}">${marks?`<span class="mark ${mc}">${ml}</span>`:""}${o.r||esc(o.t)}</span>`}
+    return isNow(i)?`<span class="ent now">投票中…</span>`:`<span class="blank">${blank||""}</span>`};
+  const tag=(i,t)=>`<div class="sub-ent ${isNow(i)?"on":""}"><span class="lab">${t}</span>${val(i)}</div>`;
+  const cb=(l,on)=>`<span class="cb ${on?"on":""}">${on?"■":"□"}${l}</span>`;
+  const row=(k,v,cls="")=>`<div class="fr ${cls}"><div class="fk">${k}</div><div class="fv">${v}</div></div>`;
+  const done=i=>P(i)!=null&&!isNow(i);
+  const oB=done(2)&&P(2)===1, risk=done(4)?P(4):null, ntf=done(9)?P(9):null;
+  const s3=`<div class="form">
+    <div class="fh"><b>晴光社區心理諮商所　個案紀錄</b><span>第 3 次</span></div>
+    <div class="fmeta"><span>個案姓名：小安（化名）</span><span>接案日期：115/10/08</span></div>
+    <div class="fsec">一、治療歷程摘要</div>
+    ${row("諮商日期","115/10/22")}
+    ${row("諮商目標","降低焦慮、改善睡眠")}
+    ${row("內容摘要<i class=\"sp\">S</i>",tag(1,"主訴")+`<div class="sub-ent"><span class="lab">家庭</span>個案表示與母親同住，近期因換工作的決定與母親爭執，談及此事時哭泣。</div><div class="sub-ent"><span class="lab">醫療</span>據個案表示，其精神科醫師診斷為失眠症，目前服用助眠藥物。</div>`)}
+    ${row("行為觀察<i class=\"sp\">O</i>",`<div class="cbs"><span class="cbk">語言表達</span>${cb("正常",false)}${cb("多話",oB)}${cb("小聲",false)}</div><div class="cbs"><span class="cbk">眼神專注</span>${cb("正常",false)}${cb("規避",false)}${cb("閃爍",false)}</div>`+tag(2,"其他描述"))}
+    <div class="fsec">二、治療評估</div>
+    ${row("治療關係",`<div class="cbs">${cb("良好",P(13)===1)}${cb("適中",false)}${cb("不佳",false)}</div>`)}
+    ${row("風險評估<i class=\"sp\">A</i>",`<div class="cbs">${cb("本次不需評估",false)}${cb("低",risk===1)}${cb("中",false)}${cb("高（需註明通報時間）",false)}</div>`+tag(4,"說明"))}
+    <div class="fsec">三、未來治療計畫與建議<i class="sp">P</i></div>${row("1",`<div class="sub-ent ${isNow(7)?"on":""}">${val(7)}</div>`)}
+    <div class="fsec">四、特殊註記</div>${row("1",`<div class="sub-ent ${isNow(6)?"on":""}">${val(6)}</div>`)}
+    <div class="fsign"><span>心理師：＿＿＿＿（簽章）</span><span>證書字號：諮心字第○○○○○○號</span><span class="sub-ent ${isNow(0)?"on":""}">紀錄完成日期：${val(0,"115/　/　")}</span></div>
+  </div>`;
+  const s4=`<div class="form">
+    <div class="fh"><b>晴光社區心理諮商所　個案紀錄</b><span>第 4 次</span></div>
+    ${row("諮商日期","115/10/29")}
+    ${row("內容摘要",`<div class="sub-ent ${isNow(12)?"on":""}">${val(12)}</div>`)}
+    <div class="fsec">四、特殊註記</div>${row("1",`<div class="sub-ent ${isNow(11)?"on":""}">${val(11)}</div>`)}
+  </div>`;
+  const s5=`<div class="form">
+    <div class="fh"><b>晴光社區心理諮商所　個案紀錄</b><span>第 5 次</span></div>
+    ${row("諮商日期","115/11/05")}
+    ${row("風險評估",`<div class="cbs">${cb("本次不需評估",false)}${cb("低",ntf===1)}${cb("中",false)}${cb(ntf===0?"高（通報時間：115/11/05 21:30）":"高（需註明通報時間）",ntf===0)}</div>`+tag(9,"說明"))}
+  </div>`;
+  return `<div class="rec-head"><h2>個案紀錄</h2><span>晤談紀錄（進展紀錄）</span></div>${s3}${s4}${s5}
+  <div class="sign"><span>本份紀錄評等</span><div class="seal-slot">${marks?`<div class="seal small ${s.type==="grade"?"stamp":""}">${gi.g.g}</div>`:""}</div></div>`;
+}
+function renderRecord(){$("#record").innerHTML=recordHTML();if(sheetKind==="record")renderSheet()}
+function renderHostbar(){
+  const hb=$("#hostbar");if(!isHost||mode==="connecting"){hb.hidden=true;return}hb.hidden=false;
+  const s=cur();
+  let left=`<button class="ghost ${confirmRestart?"danger":""}" id="hb-restart">${confirmRestart?"確定重來？再按一次":"重新開始"}</button>`;
+  if(S.step>0&&!(s.type==="vote"&&S.sub!=="result"))left+=`<button class="ghost" id="hb-back">上一步</button>`;
+  left+=`<label class="tg"><input type="checkbox" id="hb-auto" ${autoOn()?"checked":""}> 自動進行</label><label class="tg secs">每題 <select id="hb-secs">${[20,30,45,60].map(v=>`<option value="${v}" ${v===voteSecs?"selected":""}>${v} 秒</option>`).join("")}</select></label>`;
+  let right="";
+  if(s.type==="vote"&&S.sub==="vote"){right=`<button class="btn" id="hb-main">截止投票</button>`}
+  else if(s.type==="vote"&&S.sub==="tie")right=`<span class="hint">平手：請點一個選項</span>`;
+  else if(s.type==="ideal")right=`<span class="hint">活動結束</span>`;
+  else right=`<span class="hint">${s.type==="lobby"?"點對話框的 ▼ 開始":autoOn()?"自動進行中，也可以點 ▼ 跳下一步":isOver()?"點對話框的 ▼ 回到這一題重選":"點對話框的 ▼ 繼續"}</span>`;
+  hb.innerHTML=`<div class="in"><div class="left">${left}</div>${right}</div>`;
+}
+
+document.addEventListener("click",e=>{
+  const o=e.target.closest("[data-opt]");
+  if(o&&!o.disabled){const i=+o.dataset.opt;if(S.sub==="vote")vote(i);else if(S.sub==="tie"&&isHost)hostChoose(i);return}
+  const a=e.target.closest("[data-adj]");if(a){const [i,d]=a.dataset.adj.split(":").map(Number);adjust(i,d);return}
+  if(e.target.closest("#hb-main"))hostPrimary();else if(e.target.closest("#hb-restart"))restart();else if(e.target.closest("#hb-back"))hostBack();
+});
+document.addEventListener("change",e=>{
+  if(e.target.id==="hb-auto"){auto=e.target.checked;if(auto&&cur().type==="vote"&&S.sub==="vote"&&!S.dl)commit({...S,dl:newDl()});else if(!auto&&S.dl)commit({...S,dl:0});else render()}
+  if(e.target.id==="hb-secs"){voteSecs=+e.target.value;try{localStorage.setItem("rg-secs",voteSecs)}catch(_){}if(autoOn()&&S.sub==="vote")commit({...S,dl:newDl()})}
+});
+
+/* ================= boot (Firebase) ================= */
+let myName=load("rg-name")||"";
+function goLocal(why){if(mode==="local")return;mode="local";isHost=true;localWhy=why||"";S=normalize(load("rg2-local"));dlgKey=null;gate(null);render()}
+function gate(kind,err){
+  const g=$("#gate");
+  if(!kind){g.hidden=true;g.innerHTML="";return}
+  g.hidden=false;
+  if(kind==="join")g.innerHTML=`<form class="gatebox" id="gf"><h2>晴光社區心理諮商所</h2><p>今晚你是這裡的心理師。輸入暱稱加入，跟著主持人一起投票。</p>
+    <label for="nick">暱稱<input id="nick" maxlength="12" autocomplete="nickname" value="${esc(myName)}" required></label><div class="err">${esc(err||"")}</div><button class="btn" type="submit">加入遊戲</button></form>`;
+  else g.innerHTML=`<form class="gatebox" id="gf"><h2>主持人登入</h2><p>用你在 Firebase 建立的主持人帳號登入。</p>
+    <label for="em">Email<input id="em" type="email" autocomplete="username" required></label>
+    <label for="pw">密碼<input id="pw" type="password" autocomplete="current-password" required></label><div class="err">${esc(err||"")}</div>
+    <button class="btn" type="submit">登入</button><button class="ghost" type="button" id="gl">先用單機模式</button></form>`;
+  const f=$("#gf");
+  f.addEventListener("submit",async e=>{e.preventDefault();
+    if(kind==="join"){const n=$("#nick").value.trim().slice(0,12);if(!n){gate("join","請輸入暱稱");return}myName=n;store("rg-name",n);await join();}
+    else{try{await firebase.auth().signInWithEmailAndPassword($("#em").value.trim(),$("#pw").value)}catch(err){gate("host","登入失敗，請確認 email 和密碼。")}}
+  });
+  const gl=document.getElementById("gl");if(gl)gl.addEventListener("click",()=>goLocal(""));
+}
+async function join(){
+  try{const ref=rdb.ref(`rooms/${ROOM}/players/${uid}`);await ref.set({name:myName,t:firebase.database.ServerValue.TIMESTAMP});ref.onDisconnect().remove();joined=true;gate(null);render()}
+  catch(e){gate("join","加入失敗，請重新整理再試一次。")}
+}
+function subscribe(){
+  if(subscribed)return;subscribed=true;
+  stateRef=rdb.ref(`rooms/${ROOM}/state`);
+  stateRef.on("value",snap=>{
+    const next=snap.exists()?normalize(snap.val()):S;
+    if(next.epoch!==S.epoch)manual={};
+    if(STEPS[next.step].type==="vote"&&next.sub==="result"&&!(S.step===next.step&&S.sub==="result"))lastFresh=STEPS[next.step].r;
+    S=next;render();
+  },()=>goLocal("讀不到資料（請檢查 Firebase 規則）。"));
+  rdb.ref(`rooms/${ROOM}/players`).on("value",snap=>{players=snap.val()||{};renderStatus();if(cur().type==="lobby"||cur().type==="vote")renderPanel()});
+  rdb.ref(`rooms/${ROOM}/votes`).on("value",snap=>{votesNode=snap.val()||{};if(cur().type==="vote"&&S.sub==="vote")renderPanel()});
+  rdb.ref(".info/connected").on("value",snap=>{connected=!!snap.val();renderStatus();if(connected&&joined&&!isHost){const ref=rdb.ref(`rooms/${ROOM}/players/${uid}`);ref.set({name:myName,t:firebase.database.ServerValue.TIMESTAMP});ref.onDisconnect().remove()}});
+}
+render();
+if(!FIREBASE_CONFIG.apiKey||typeof firebase==="undefined"){goLocal("還沒有設定 Firebase。")}
+else{
+  firebase.initializeApp(FIREBASE_CONFIG);rdb=firebase.database();
+  firebase.auth().onAuthStateChanged(user=>{
+    if(!user){if(WANT_HOST)gate("host");else firebase.auth().signInAnonymously().catch(()=>goLocal("匿名登入沒有開啟。"));return}
+    uid=user.uid;
+    if(WANT_HOST&&user.isAnonymous){gate("host");return}
+    isHost=WANT_HOST&&!user.isAnonymous;mode="online";subscribe();
+    if(isHost){gate(null);render()}
+    else if(myName)join();else{render();gate("join")}
+  });
+}
+</script>
+
+</body>
+</html>
