@@ -58,6 +58,8 @@ header.top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-
 .hpbar .track{width:84px;height:8px;background:var(--hpbg);border:1px solid var(--frame)}
 .hpbar .fill{height:100%;background:var(--hp);transition:width .6s steps(8)}
 .hpbar .fill.low{background:var(--bad)}
+.hpbar .fill.slow{transition:width 7s linear}
+.hpbar .lbl{font-size:10px;color:var(--muted);white-space:nowrap}
 .hpbar .fill.money{background:var(--gold)}
 .hpbar .fill.money.low{background:var(--bad)}
 .clock{text-align:right}
@@ -134,6 +136,13 @@ details[open] summary{margin-bottom:8px}
 .scale div b{font-family:var(--serif);font-size:18px;color:var(--text);margin-right:4px}
 .scale div.on{border-color:var(--seal);color:var(--seal)} .scale div.on b{color:var(--seal)}
 .capnote{color:var(--bad);font-size:14px;margin:0}
+.record.export{position:fixed;left:-10000px;top:0;width:440px;max-height:none!important;overflow:visible!important;box-shadow:none;border-radius:0}
+.record.export *{animation:none!important}
+.exp-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:10px;font-family:var(--sans);font-size:12px;color:var(--pmuted)}
+.exp-top b{font-family:var(--serif);font-size:15px;color:var(--ink)}
+.exp-foot{margin-top:8px;font-family:var(--sans);font-size:13px;font-weight:700;color:var(--ink);text-align:right}
+.saveimg{display:grid;place-items:center;margin-top:8px}
+.saveimg img{width:100%;max-width:440px;display:block;border-radius:4px;-webkit-touch-callout:default;-webkit-user-select:auto;user-select:auto}
 .refs p{margin:0 0 6px;font-size:14px;color:var(--muted);padding-left:2em;text-indent:-2em}
 .refs i{color:var(--text)}
 .cd{float:right;font-family:var(--pixel);font-size:11px;color:var(--gold);padding:2px 6px;border:1px solid var(--gold);border-radius:4px}
@@ -151,7 +160,9 @@ details[open] summary{margin-bottom:8px}
 .soap b{font-family:var(--pixel);font-size:10px;width:24px;height:24px;display:grid;place-items:center;border:2px solid var(--line);border-radius:4px;color:var(--muted)}
 .soap b.done{border-color:var(--good);color:var(--good)}
 .soap b.now{border-color:var(--gold);background:var(--gold);color:#1b1608}
-.soap span{margin-left:6px}
+.soap{flex-wrap:wrap}
+.soap span.soap-def{margin-left:6px;min-width:0;flex:1 1 12em;color:var(--text)}
+.soap cite{display:block;font-style:normal;color:var(--muted);font-size:11px}
 .sp{font-style:normal;font-family:var(--pixel);font-size:8px;margin-left:4px;padding:1px 3px;border:1px solid var(--ink);border-radius:3px;color:var(--ink);vertical-align:1px}
 .hint{color:var(--muted);font-size:13px}
 .sheet-wrap{position:fixed;inset:0;z-index:40;background:rgba(8,10,20,.6);display:flex;align-items:flex-end;justify-content:center}
@@ -284,6 +295,7 @@ label.tg{display:inline-flex;gap:6px;align-items:center;cursor:pointer}
 <div class="overlay" id="gate" hidden></div>
 <div class="sheet-wrap" id="sheet" hidden></div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
@@ -306,35 +318,35 @@ const PROFILE=[
   ["居住","和媽媽同住；爸媽離婚，爸爸很少聯絡"],
   ["來談原因","半年來失眠、焦慮，上班常心悸，朋友推薦她來"],
   ["困擾","想換工作，但媽媽強烈反對；常說自己「做什麼都沒用」"],
-  ["就醫","精神科醫師診斷為失眠症，有開助眠藥"],
-  ["晤談進度","第 1 次初談、第 2 次訂目標（降低焦慮、改善睡眠），今天第 3 次"],
+  ["就醫","在身心科診所就診，醫師診斷為焦慮症，有開安眠藥"],
+  ["晤談進度","今天是第 1 次晤談（初談）"],
   ["緊急聯絡人","媽媽"]
 ];
 const FACTS=[
   "遲到 15 分鐘，語速很快，晤談中看了 3 次手機",
-  "這週有 3 晚躺超過 1 小時才睡著；焦慮自評 7 分（上週 8 分）",
+  "這週有 3 晚躺超過 1 小時才睡著；焦慮自評 7 分（1–10 分）",
   "和同住的母親為了換工作的事吵架，講到這裡時哭了",
   "提到「有時候覺得消失也沒關係」（你當場評估：沒有具體計畫、沒有工具、沒有自傷史）",
-  "她的精神科醫師診斷為失眠症，有開助眠藥",
-  "她描述一個在海裡溺水的夢；你也發現自己對她一直說「沒用啦」有點煩躁"
+  "她在身心科診所就診，醫師診斷為焦慮症，有開安眠藥",
+  "她描述一個沉到海裡的夢；你也發現自己對她一直說「沒用啦」有點煩躁"
 ];
 const ROUNDS=[
- {id:"tired",k:"撰寫時間",sec:3,q:"……等等，小安的紀錄還沒寫。怎麼辦？",ctx:p=>p[10]===0?"晚上 11:00，你躺在沙發上，體力還有 45%。":"晚上 11:00，你癱在沙發上，體力只剩 2%。",
+ {id:"tired",k:"撰寫時間",sec:3,q:"……等等，小安的紀錄還沒寫。怎麼辦？",ctx:"晚上 11:00，你癱在沙發上，體力只剩 2%。今天 7 位個案的紀錄，加上上週欠的，一份都還沒寫。",
   o:[{t:"明天一早到諮商所，第一件事就把紀錄寫完。",r:"115/10/23 08:45（晤談隔日上班第一件事）",p:3},
      {t:"明天有空再說吧。",r:"115/10/23 17:30（補寫）",p:1},
      {t:"反正我都記得，不寫了。",r:"115/10/26（主管抽查後補寫）",p:0},
      {t:"先用自己的手機記事本，把小安說的重點打下來。",r:"115/10/23 09:30（依手機記事整理）",p:1}],
   why:"最理想是晤談後 10 分鐘就寫完再下班（林家興建議「50 分鐘晤談、10 分鐘寫紀錄」）。既然已經回家，就隔天一早回諮商所寫；拖越久記得越不準，不做紀錄在今天是不可原諒的。個案資料存在私人手機，也有外洩風險。",src:"林家興（2023），頁 151；Corey 等（2024），頁 172、174"},
- {id:"s",k:"主訴",code:"S",sec:3,q:"她談到這週的睡眠和焦慮，你要怎麼寫？",ctx:"（回想）她說這週有 3 晚躺超過 1 小時才睡著，焦慮自評 7 分，上週是 8 分。",
+ {id:"s",k:"主訴",code:"S",sec:3,q:"她談到這週的睡眠和焦慮，你要怎麼寫？",ctx:"你打開電腦裡小安的紀錄表，一邊回想她說過的話，一邊打字。先寫 S：她自己怎麼描述最近的狀況？她說這週有 3 晚躺了超過 1 小時才睡著，焦慮自評 7 分。",
   o:[{t:"個案又在抱怨睡不好，感覺只是想找人發洩。",p:0},
-     {t:"個案表示本週有 3 晚躺床超過 1 小時才入睡，焦慮自評 7 分（滿分 10），上週為 8 分。",p:3},
+     {t:"個案表示本週有 3 晚躺床超過 1 小時才入睡，焦慮自評 7 分（1–10 分）。",p:3},
      {t:"個案睡很差，焦慮很嚴重。",p:1},
      {t:"把她說的話全部逐字記下來，大約兩頁。",r:"（逐字記錄晤談內容，共兩頁）",p:1}],
   why:"寫具體、可追蹤的事實，不寫心理師的情緒；太模糊看不出變化，逐字稿則太冗長，也增加保密風險。",src:"林家興（2023），頁 148；Corey 等（2024），頁 172"},
- {id:"o",k:"觀察",code:"O",sec:3,q:"晤談中你觀察到的狀況，要怎麼寫？",ctx:"（回想）她遲到 15 分鐘，講話很快，中間看了 3 次手機。",
+ {id:"o",k:"觀察",code:"O",sec:3,q:"晤談中你觀察到的狀況，要怎麼寫？",ctx:"接著是 O。你回想晤談時看到的她：遲到 15 分鐘，講話很快，中間看了 3 次手機。",
   o:[{t:"個案態度不佳，明顯不重視諮商。",p:0},
      {t:"個案遲到 15 分鐘，語速快，晤談中看手機 3 次。",p:3},
-     {t:"個案看起來很焦慮，疑似廣泛性焦慮症。",p:1},
+     {t:"個案看起來很焦慮，疑似有恐慌症。",p:1},
      {t:"個案遲到。",p:2}],
   why:"描述看得到的行為，不寫評價或沒經過評估的診斷。「個案遲到」沒錯，但少了能看出狀態的細節。",src:"林家興（2023），頁 148；Corey 等（2024），頁 174"},
  {id:"fam",k:"家庭",code:"S",sec:3,cut:true,q:"她談到和母親的衝突，你要怎麼寫？",ctx:"（回想）她和母親同住，最近為了換工作的事吵架，講到這裡時哭了。",
@@ -343,25 +355,25 @@ const ROUNDS=[
      {t:"詳細記下母親說過的每一句重話，以及母親自己小時候的成長經驗。",r:"母親曾對個案說的重話逐條記錄如下……另，母親幼年成長經驗為……",p:1},
      {t:"家裡的事太敏感，完全不寫。",r:"（未記錄）",p:1}],
   why:"紀錄只寫和個案有關的臨床資料。不評論個案的父母，也不寫太多他人的資料；但重要壓力源完全不寫也不行。",src:"林家興（2023），頁 149"},
- {id:"risk",k:"風險",code:"A",sec:3,q:"這段要怎麼寫進紀錄？",ctx:"（回想）她說「有時候覺得消失也沒關係」，拜託你不要讓別人知道。你評估後：沒有具體計畫、沒有工具、沒有自傷史，沒有立即危險，也判斷暫時不需要通知家人。",
+ {id:"risk",k:"風險",code:"A",sec:3,q:"這段要怎麼寫進紀錄？",ctx:"然後是 A，最難打的一段。你想起她低著頭說「有時候覺得消失也沒關係」，還拜託你不要讓別人知道。你當時評估：沒有具體計畫、沒有工具、沒有自傷史，沒有立即危險，也判斷暫時不需要通知家人。",
   o:[{t:"只寫：個案提到有時覺得消失也沒關係。",r:"個案提到「有時覺得消失也沒關係」。",p:1},
      {t:"完整寫下她說的話、你的評估、安全計畫，以及她不希望別人知道、你判斷暫不通知家屬的理由。",r:"個案提到「有時覺得消失也沒關係」。經評估無具體計畫、無工具、無自傷史，無立即危險；個案不希望他人知道，評估後暫不通知家屬，並已向個案說明保密例外。已擬定安全計畫並提供 1925 安心專線，下次晤談再評估。",p:3},
      {t:"她拜託我不要讓別人知道，所以紀錄裡不寫。",r:"（未記錄）",p:0},
      {t:"寫成「個案近期情緒低落」，不提到自殺。",r:"個案近期情緒低落。",p:0}],
   why:"幫個案保密，不等於不寫進紀錄。自殺意念要寫下評估、處置，以及你判斷暫不通知家人的理由；只寫有風險、沒寫評估和處置，出事時反而對心理師不利，不寫或寫得含糊更危險。",src:"林家興（2023），頁 148；Corey 等（2024），頁 172、175"},
- {id:"med",k:"醫療",code:"S",sec:3,cut:true,q:"失眠症是精神科醫師診斷的，你要怎麼寫？",ctx:"（回想）她的精神科醫師診斷為失眠症，有開助眠藥。",
-  o:[{t:"個案有失眠症，正在服用安眠藥。",p:1},
-     {t:"據個案表示，其精神科醫師診斷為失眠症，目前服用助眠藥物。",p:3},
+ {id:"med",k:"醫療",code:"S",sec:3,cut:true,q:"焦慮症是身心科醫師診斷的，你要怎麼寫？",ctx:"（回想）她在身心科診所就診，醫師診斷為焦慮症，有開安眠藥。",
+  o:[{t:"個案有焦慮症，正在吃安眠藥。",p:1},
+     {t:"據個案表示，其身心科醫師診斷為焦慮症，目前服用安眠藥物。",p:3},
      {t:"個案有藥物依賴傾向，建議減藥。",p:0},
-     {t:"個案有在看精神科。",p:1}],
+     {t:"個案有在看身心科。",p:1}],
   why:"別人提供的資料要註明來源，否則看起來像心理師自己下的診斷。用藥建議超出心理師的專業範圍。",src:"林家興（2023），頁 149"},
- {id:"proc",k:"歷程紀錄",sec:3,q:"要不要另外寫一份歷程紀錄？",ctx:"（回想）她描述在海裡溺水的夢；你對她一直說「沒用啦」感到煩躁，想下次督導時討論。晤談紀錄（又叫進展紀錄）是要留存的正式紀錄，簡短客觀，可能成為法庭證據；歷程紀錄（又叫過程紀錄、心理治療紀錄）則像心理師的個人日記。",
-  o:[{t:"不另外寫，直接把夢境和你的煩躁寫進晤談紀錄。",r:"個案夢見在海裡溺水，象徵被母親吞噬；心理師對個案感到煩躁，疑似反移情。",p:0},
+ {id:"proc",k:"歷程紀錄",sec:3,q:"要不要另外寫一份歷程紀錄？",ctx:"正式紀錄打完了，你按下儲存，手離開鍵盤。她說的那個沉到海裡的夢，還有你聽到「沒用啦」時的煩躁，一直在腦中打轉，你想下次督導時討論。晤談紀錄（又叫進展紀錄）是要留存的正式紀錄，簡短客觀，可能成為法庭證據；歷程紀錄（又叫過程紀錄、心理治療紀錄）則像心理師的個人日記。",
+  o:[{t:"不另外寫，直接把夢境和你的煩躁寫進晤談紀錄。",r:"個案夢見自己沉到海裡，象徵被母親吞噬；心理師對個案感到煩躁，疑似反移情。",p:0},
      {t:"寫一份歷程紀錄當個人日記，私下收好；督導討論完就銷毀。",r:"（夢境與心理師感受另記於個人日記，供督導使用，不入正式紀錄）",p:3},
-     {t:"寫一份歷程紀錄，和晤談紀錄一起放進個案檔案。",r:"【附件】歷程紀錄：個案夢見溺水……心理師對個案感到煩躁……",p:1},
+     {t:"寫一份歷程紀錄，和晤談紀錄一起放進個案檔案。",r:"【附件】歷程紀錄：個案夢見沉到海裡……心理師對個案感到煩躁……",p:1},
      {t:"不寫歷程紀錄，也不拿去督導。",r:"（未記錄）",p:2}],
   why:"晤談紀錄＝進展紀錄（progress note），是要留存的正式紀錄；歷程紀錄＝過程紀錄＝心理治療紀錄（process note），不是病歷。課本建議只針對需要督導或反思的少數個案寫，寫了就當私人日記收著，用完就銷毀。寫進晤談紀錄或放進個案檔案，被調閱時都可能被揭露。",src:"林家興（2023），頁 149–150；Corey 等（2024），頁 173"},
- {id:"plan",k:"計畫",code:"P",sec:3,q:"接下來的處遇計畫，要怎麼寫？",ctx:"（回想）下次想教她呼吸放鬆，並追蹤睡眠和安全計畫。",
+ {id:"plan",k:"計畫",code:"P",sec:3,q:"接下來的處遇計畫，要怎麼寫？",ctx:"最後是 P。你想了想下一次要做什麼：教她呼吸放鬆，並追蹤她的睡眠和安全計畫。",
   o:[{t:"下次再看看。",p:0},
      {t:"維持每週 1 次晤談；下次練習腹式呼吸，追蹤睡眠紀錄與安全計畫執行情形。",p:3},
      {t:"下次要讓個案認清母親的問題，鼓勵她搬出去住。",p:0},
@@ -375,14 +387,15 @@ const ROUNDS=[
   why:"紀錄放進檔案後絕對不能竄改。寫錯時劃線更正，簽名並押上日期，不可以塗改或撕掉。",src:"林家興（2023），頁 151；Corey 等（2024），頁 175"},
  {id:"notify",k:"風險處置",sec:5,q:"……接下來要怎麼做？",ctx:"晤談結束，晚上 8:58。小安已經離開，你的體力只剩 5%。",
   o:[{t:"24 小時內完成自殺防治通報；先向小安說明保密例外，聯絡緊急聯絡人、更新安全計畫，並把評估與處置寫進紀錄。",
-      r:"個案表示上週末曾過量服用助眠藥物，經評估屬自殺行為。已於 24 小時內完成自殺防治通報；已向個案說明保密例外並聯絡緊急聯絡人，更新安全計畫，約定 3 天後電話關懷。",p:3},
+      r:"個案表示上週末曾過量服用安眠藥物，經評估屬自殺行為。已於 24 小時內完成自殺防治通報；已向個案說明保密例外並聯絡緊急聯絡人，更新安全計畫，約定 3 天後電話關懷。",p:3},
      {t:"她看起來還好，又拜託我保密。太累了，下次晤談再說。",r:"個案情緒平穩，下次晤談再評估。",p:0},
      {t:"有通報、也處理了，但太累了，紀錄之後再說。",r:"（未記錄）",p:1},
-     {t:"把這件事寫進紀錄，但尊重她的意願，不通報。",r:"個案表示上週末曾過量服用助眠藥物，個案要求保密。",p:0}],
+     {t:"把這件事寫進紀錄，但尊重她的意願，不通報。",r:"個案表示上週末曾過量服用安眠藥物，個案要求保密。",p:0}],
   why:"醫事人員（包括心理師）知悉有自殺行為，應在 24 小時內通報；當事人有生命危險屬於保密例外。危急時記下自己採取的行動，也是在保護自己。",src:"自殺防治法第 11 條、施行細則第 13 條；Corey 等（2024），頁 175"},
- {id:"load",k:"今日排班",sec:0,unscored:true,q:"今天要接幾位個案？",ctx:"最後一位一定是小安（20:00–21:00），她的第 3 次晤談。",
-  o:[{t:"2 位：17:00–18:00、20:00–21:00。輕鬆，但這個月可能會餓死。"},
-     {t:"6 位：從下午一路排到晚上。收入夠了，但體力會只剩 5%。"}]},
+ {id:"leave",k:"今日出勤",sec:0,unscored:true,gate:true,passMsg:"你撐著去上班了。這一題不計分，但今天結束時，你的體力會只剩 5%。",q:"今天要怎麼辦？",ctx:"10/22（四）早上 7:30，鬧鐘響了。你全身痠痛，體力只剩 30%。今天排了 7 位個案，小安是最後一位。",
+  o:[{t:"傳訊息給諮商所請假，今天 7 位個案全部改期，包括小安。",over:"你把 7 位個案全部改期。這個月的收入少了一大截，月底一看，存款歸零，連房租都繳不出來。",overT:"存款歸零"},
+     {t:"撐著去上班。今天 7 位個案全部照談，小安是第 7 位，體力會只剩 5%。"}],
+  why:"心理師也要照顧自己，請假本身沒有錯。但在這個故事裡，存款歸零就沒辦法繼續執業了。請選擇上班，繼續小安的故事。"},
  {id:"sup",k:"主管查核",sec:4,q:"主管要看小安的紀錄，你會給嗎？",ctx:"小安上次拜託你，不要讓別人知道她想消失。",
   o:[{t:"給。紀錄是機構的，主管要什麼都給，連我的歷程紀錄一起交出去。",r:"115/10/26 主管查核：提供完整個案檔案（含心理師個人歷程紀錄）",p:1},
      {t:"給主管看正式的晤談紀錄，確認完整；歷程紀錄是個人日記，不提供。",r:"115/10/26 主管查核：提供晤談紀錄；歷程紀錄屬個人筆記，未提供",p:3},
@@ -394,8 +407,8 @@ const ROUNDS=[
      {t:"把紀錄印給她，讓她自己帶回去看。",r:"個案要求查閱紀錄，已提供複本由個案自行閱讀。",p:2},
      {t:"拒絕。紀錄是心理師寫的，個案不能看。",r:"個案要求查閱紀錄，心理師拒絕。",p:0},
      {t:"請主管陪她看就好，你先離開，避免衝突。",r:"個案要求查閱紀錄，由主管陪同個案閱讀。",p:1}],
-  why:"當事人有權查閱或複印自己的紀錄，除非能證明會對她產生誤導或不利；醫療法也規定不得無故拒絕。心理師在場一起看、說明內容，最能減少誤解。這也是為什麼下筆前要先假設個案會讀到。",src:"林家興（2023），頁 148、151；Corey 等（2024），頁 174"},
- {id:"inform",k:"保密",sec:0,unscored:true,gate:true,q:"要通知她的家人嗎？",ctx:"晚上 8:40，晤談還剩 20 分鐘。小安低著頭，等你回答。",
+  why:"當事人有權查閱或複印自己的紀錄，除非能證明會對她產生誤導或不利；醫療法也規定不得無故拒絕。心理師在場一起看、說明內容，最能減少誤解。這也是為什麼寫紀錄前要先假設個案會讀到。",src:"林家興（2023），頁 148、151；Corey 等（2024），頁 174"},
+ {id:"inform",k:"保密",sec:0,unscored:true,gate:true,passMsg:"你守住了小安的信任，遊戲繼續。這一題不計分。",q:"要通知她的家人嗎？",ctx:"晚上 8:50，晤談還剩 10 分鐘。小安低著頭，等你回答。",
   o:[{t:"打電話給她媽媽，請家人多留意她。",over:"你打給小安的媽媽。隔天，小安取消了之後所有的晤談，也不再接諮商所的電話。"},
      {t:"尊重她的意願保密，和她一起擬定安全計畫，並說明保密例外：如果有立即危險，我就會通知家人。"},
      {t:"直接通報衛生局，交給專業單位處理。",over:"衛生局的關懷訪視員打電話到小安家，是她媽媽接的。小安覺得被出賣，再也沒有回來。"}],
@@ -409,64 +422,71 @@ const GRADES=[
  {g:"ㄈ",min:0,t:"請重寫",d:"這份紀錄被調閱時，很可能變成對你不利的證據。"}
 ];
 const N=(t)=>({who:"旁白",t});
-const STEPS=[{type:"lobby"},{type:"story",id:"intro"},{type:"vote",r:10},{type:"story",id:"session"},{type:"vote",r:13},{type:"story",id:"work"},{type:"story",id:"commute"},{type:"story",id:"home"},{type:"vote",r:0},{type:"story",id:"bridge"}];
+const STEPS=[{type:"lobby"},{type:"story",id:"intro"},{type:"story",id:"weekpass"},{type:"vote",r:10},{type:"story",id:"today"},{type:"story",id:"session1"},{type:"story",id:"session2"},{type:"vote",r:13},{type:"story",id:"work"},{type:"story",id:"commute"},{type:"story",id:"home"},{type:"vote",r:0},{type:"story",id:"bridge"}];
 [1,2,4,7,6].forEach(i=>STEPS.push({type:"vote",r:i}));
 STEPS.push({type:"story",id:"audit"},{type:"vote",r:11},{type:"story",id:"angry"},{type:"vote",r:12},{type:"story",id:"week"},{type:"vote",r:9},{type:"epilogue"},{type:"grade"},{type:"ideal"});
 const VOTE_ORDER=STEPS.filter(s=>s.type==="vote").map(s=>s.r);
 
 function storyLines(id,picks){
-  const two=picks[10]===0;
-  if(id==="intro")return[N("10/22（四）中午 12:30，晴光社區心理諮商所。"),N("你是這裡的心理師，正在排今天的班表。"),{who:"主管",t:"今天預約很多，你看要接幾位？"}];
-  if(id==="session")return[two?N("17:00 第一位個案，18:00 結束。你吃了個便當，休息一下。20:00，小安來了。"):N("從下午開始，一位接著一位，中間只喝了幾口水。20:00，最後一位小安來了。"),
-    N("24 歲的她和媽媽同住，半年來失眠、焦慮。今天談到想換工作卻被媽媽反對，她哭了。"),
-    {who:"小安",t:"有時候覺得……消失也沒關係。"},{who:"小安",t:"你不要跟我媽說，拜託。"},N("你仔細評估：沒有具體計畫、沒有工具、沒有自傷史，目前沒有立即危險。")];
-  if(id==="work")return two
-    ?[N("21:00，小安離開。"),{who:"心理師",t:"體力還行……但這個月要吃泡麵了。"},N("你想著紀錄回家再說，收拾東西就下班了。")]
-    :[N("21:00，小安離開，你的體力只剩 5%。"),{who:"心理師",t:"……撐不住了，先下班。"},N("紀錄先放著，你收拾東西就走了。")];
+  if(id==="intro")return[N("10/15（四）中午 12:30，倫理大師心理諮商所。"),{who:"主管",t:"下週四晚上 8 點有一位新個案，24 歲，因為失眠和焦慮想來談。你願意多接這個案嗎？"},{who:"心理師",t:"好，我接。"},N("下週四的班表，一口氣排了 7 位個案，小安是最後一位。")];
+  if(id==="weekpass")return[N("接下來的一週，個案一位接著一位。"),N("白天晤談，晚上開會、寫報告，週末還去上了一整天的研習。"),N("上週的晤談紀錄，到現在都還沒寫完。")];
+  if(id==="today")return[N("08:30 到諮商所。第 1 位、第 2 位、第 3 位……"),N("中午只扒了幾口便當，下午繼續談。第 4 位、第 5 位、第 6 位……"),N("20:00，你的體力只剩一點點。今天的最後一位，就是小安。")];
+  if(id==="session1")return[N("20:15，小安遲到了 15 分鐘，匆匆走進晤談室。這是她的第一次晤談。"),N("你先說明晤談的時間、收費，以及保密和保密的例外。她點點頭，在同意書上簽了名。"),{who:"小安",t:"我最近一直睡不著，躺在床上心臟就跳很快。這禮拜有 3 天，躺了一個多小時才睡著。"},N("你請她用 1 到 10 分替焦慮打分數，她說 7 分。講話時她語速很快，中間看了 3 次手機。"),{who:"小安",t:"我想換工作，可是我媽一直反對……反正我做什麼都沒用啦。"},N("說到這裡，她哭了。「沒用啦」這句話她說了好幾次，你發現自己心裡有點煩躁。")];
+  if(id==="session2")return[N("她說自己有在身心科看診，醫師說是焦慮症，有開安眠藥。"),{who:"小安",t:"我最近常夢到自己在海裡，一直往下沉……"},N("晤談快結束時，她低著頭，小聲地說："),{who:"小安",t:"有時候覺得……消失也沒關係。你不要跟我媽說，拜託。"},N("你仔細評估：沒有具體計畫、沒有工具、沒有自傷史，目前沒有立即危險。")];
+  if(id==="work")return[N("21:00，小安離開。你今天連續談了 7 位個案，體力只剩 5%。"),{who:"心理師",t:"……撐不住了，先下班。"},N("今天的紀錄，加上上週還沒寫完的，全部先放著。")];
   if(id==="commute")return[N("21:00 下班。"),N("捷運轉公車，晃了 40 分鐘，21:40 終於到家。")];
   if(id==="home")return[N("先吃飯、滑一下手機、洗個澡，再追兩集劇，讓身心平衡一下。"),N("回過神來，已經 23:00。")];
   if(id==="bridge"){
-    const p=picks[0],tail=N("這份紀錄照 SOAP 的順序寫：S 主觀陳述、O 客觀觀察、A 評估、P 計畫。每一欄怎麼寫，都由大家投票決定。");
+    const p=picks[0],tail=N("依照 SOAP 格式（林家興，2023）：S 主觀陳述、O 客觀觀察、A 評估、P 計畫。每一欄怎麼寫，都由大家投票決定。");
     if(p===0)return[N("隔天早上 8:45，你比平常早一點到諮商所。"),{who:"心理師",t:"趁還記得，先把小安的紀錄寫完。"},tail];
     if(p===1)return[N("隔天又是滿滿的行程，一直到傍晚 5:30 才有空。"),{who:"心理師",t:"昨天她說焦慮幾分來著……7 分？還是 6 分？"},N("你努力回想，打開紀錄表。"),tail];
     if(p===2)return[N("隔週一早上，主管抽查檔案。"),{who:"主管",t:"小安的紀錄呢？"},{who:"心理師",t:"……我現在補。"},N("你憑著模糊的記憶打開紀錄表。"),tail];
     return[N("隔天早上 9:30，你打開手機記事本，照著昨晚打的重點寫紀錄。"),tail];
   }
   if(id==="audit")return[N("10/26（一）。上個月，同機構有位心理師的紀錄沒寫完，被衛生局抽查時出了問題。"),{who:"主管",t:"從這週開始，我要看大家的個案紀錄。小安的先給我。"}];
-  if(id==="angry")return[N("10/29（四），小安的第 4 次晤談。她一進門就很激動。"),{who:"小安",t:"我媽昨天突然問我是不是想不開！是不是你跟別人說了？"},{who:"小安",t:"你到底寫了什麼？我要看我的紀錄！"}];
-  if(id==="week")return[N("又過了一週，小安的第 5 次晤談。"),{who:"小安",t:"其實……上週末我把存下來的助眠藥一次吃掉了。睡了一天一夜，家裡沒人發現。"},{who:"小安",t:"我現在沒事了啦。拜託你，不要跟任何人說。"},N("你仔細評估後確認：這是一次自殺行為。")];
+  if(id==="angry")return[N("10/29（四），小安的第 2 次晤談。她一進門就很激動。"),{who:"小安",t:"我媽昨天突然問我是不是想不開！是不是你跟別人說了？"},{who:"小安",t:"你到底寫了什麼？我要看我的紀錄！"}];
+  if(id==="week")return[N("又過了一週，小安的第 3 次晤談。"),{who:"小安",t:"其實……上週末我把存下來的安眠藥一次吃掉了。睡了一天一夜，家裡沒人發現。"},{who:"小安",t:"我現在沒事了啦。拜託你，不要跟任何人說。"},N("你仔細評估後確認：這是一次自殺行為。")];
   return[];
 }
 function hudFor(step,picks){
-  const s=STEPS[step],two=picks[10]===0,picked=picks[10]!=null,id=s.type==="story"?s.id:s.type==="vote"?"v"+s.r:s.type;
-  const money=!picked?50:two?12:85;
-  if(["lobby","intro","v10"].includes(id))return{day:"10/22（四）",time:"12:30",hp:100,money};
-  if(id==="session"||id==="v13")return{day:"10/22（四）",time:"20:40",hp:two?65:10,money};
-  if(id==="work")return{day:"10/22（四）",time:"21:00",hp:two?60:5,money};
-  if(id==="commute")return{day:"10/22（四）",time:"21:40",hp:two?55:4,money};
-  if(id==="home"||id==="v0")return{day:"10/22（四）",time:"23:00",hp:two?45:2,money};
+  const s=STEPS[step],id=s.type==="story"?s.id:s.type==="vote"?"v"+s.r:s.type;
+  const broke=id==="v10"&&S.step===step&&isOver(),money=broke?0:100,D="10/22（四）";
+  const H=(day,time,hp,slow)=>({day,time,hp,money,slow:!!slow||broke});
+  if(id==="lobby"||id==="intro")return H("10/15（四）","12:30",100);
+  if(id==="weekpass")return H("10/16–10/21","—",30,true);
+  if(id==="v10")return H(D,"07:30",30);
+  if(id==="today")return H(D,"—",8,true);
+  if(id==="session1")return H(D,"20:15",7);
+  if(id==="session2")return H(D,"20:40",6);
+  if(id==="v13")return H(D,"20:50",5);
+  if(id==="work")return H(D,"21:00",5);
+  if(id==="commute")return H(D,"21:40",4);
+  if(id==="home"||id==="v0")return H(D,"23:00",2);
   if(id==="bridge"||s.type==="vote"&&s.r>=1&&s.r<=8){
     const p=picks[0];
-    if(p===0)return{day:"10/23（五）",time:"08:45",hp:80,money};
-    if(p===1)return{day:"10/23（五）",time:"17:30",hp:30,money};
-    if(p===2)return{day:"10/26（一）",time:"09:10",hp:70,money};
-    return{day:"10/23（五）",time:"09:30",hp:75,money};
+    if(p===0)return H("10/23（五）","08:45",80);
+    if(p===1)return H("10/23（五）","17:30",30);
+    if(p===2)return H("10/26（一）","09:10",70);
+    return H("10/23（五）","09:30",75);
   }
-  if(id==="audit"||id==="v11")return{day:"10/26（一）",time:"14:00",hp:70,money};
-  if(id==="angry"||id==="v12")return{day:"10/29（四）",time:"20:05",hp:two?50:15,money};
-  if(id==="week")return{day:"11/05（四）",time:"20:00",hp:two?50:20,money};
-  if(id==="v9")return{day:"11/05（四）",time:"20:58",hp:two?40:5,money};
-  return{day:"三個月後",time:"10:00",hp:60,money};
+  if(id==="audit"||id==="v11")return H("10/26（一）","14:00",70);
+  if(id==="angry"||id==="v12")return H("10/29（四）","20:05",15);
+  if(id==="week")return H("11/05（四）","20:00",20);
+  if(id==="v9")return H("11/05（四）","20:58",5);
+  return H("三個月後","10:00",60);
 }
 function sceneFor(step,picks){
   const s=STEPS[step],id=s.type==="story"?s.id:s.type==="vote"?"v"+s.r:s.type;
   if(id==="lobby")return{k:"office",night:true,tired:true};
-  if(id==="intro"||id==="v10")return{k:"office",night:false};
-  if(id==="session")return{k:"room",mood:"sad"};
+  if(id==="intro")return{k:"office",night:false,boss:true};
+  if(id==="weekpass")return{k:"office",night:false,montage:true,spin:true,tired:true};
+  if(id==="v10")return{k:"home",low:true};
+  if(id==="today")return{k:"office",night:false,montage:true,spin:true,cal:22,tired:true};
+  if(id==="session1"||id==="session2")return{k:"room",mood:"sad"};
   if(id==="v13")return isOver()?{k:"room",mood:"gone"}:{k:"room",mood:"sad"};
-  if(id==="work")return{k:"office",night:true,tired:picks[10]!==0};
+  if(id==="work")return{k:"office",night:true,tired:true};
   if(id==="commute")return{k:"street"};
-  if(id==="home"||id==="v0")return{k:"home",low:picks[10]!==0};
+  if(id==="home"||id==="v0")return{k:"home",low:true};
   if(id==="bridge"||s.type==="vote"&&s.r>=1&&s.r<=8)return{k:"office",night:false,writing:true};
   if(id==="audit"||id==="v11")return{k:"office",night:false,boss:true};
   if(id==="angry"||id==="v12")return{k:"room",mood:"angry"};
@@ -481,7 +501,7 @@ function events(picks){
   if(P(9)===1)ev.push({sev:"bad",ic:"!",scene:"phone",h:"衛生局來電",t:"小安的家人得知她曾服藥，向衛生局投訴：心理師明明知道，卻沒有通報。紀錄上只寫著「個案情緒平穩」。"});
   if(P(9)===3)ev.push({sev:"bad",ic:"!",scene:"phone",h:"衛生局來電",t:"紀錄清楚寫著你知道她服過藥，卻找不到任何通報或處置。知悉自殺行為，應在 24 小時內通報。"});
   if(P(9)===2)ev.push({sev:"warn",ic:"?",scene:"court",h:"說不清楚的處置",t:"你明明有通報也有處理，但紀錄上一個字都沒有。調查時你說不清楚當時做了什麼。如果沒有記錄，治療就沒有發生。"});
-  if(P(4)===2||P(4)===3||P(4)===0)ev.push({sev:P(4)===0?"warn":"bad",ic:"!",scene:"court",h:"第 3 次晤談的風險紀錄",t:P(4)===2?"小安早在第 3 次晤談就提過想消失，紀錄卻一個字都沒寫。":P(4)===3?"紀錄只寫「情緒低落」，看不出她提過想消失，也看不出你做了什麼評估。":"紀錄寫了她說想消失，卻沒有評估和處置。被問到當時做了什麼，你答不出來。"});
+  if(P(4)===2||P(4)===3||P(4)===0)ev.push({sev:P(4)===0?"warn":"bad",ic:"!",scene:"court",h:"第 1 次晤談的風險紀錄",t:P(4)===2?"小安早在第 1 次晤談就提過想消失，紀錄卻一個字都沒寫。":P(4)===3?"紀錄只寫「情緒低落」，看不出她提過想消失，也看不出你做了什麼評估。":"紀錄寫了她說想消失，卻沒有評估和處置。被問到當時做了什麼，你答不出來。"});
   if(P(6)===0||P(6)===2)ev.push({sev:"bad",ic:"!",scene:"court",h:"法庭上被唸出來",t:P(6)===0?"法院調閱紀錄，你寫在晤談紀錄裡的「對個案感到煩躁，疑似反移情」被當庭唸出來。":"歷程紀錄放在個案檔案裡，被一起調閱。你對個案的煩躁被當庭唸出來。"});
   if(P(12)===2)ev.push({sev:"bad",ic:"!",scene:"phone",h:"當事人投訴",t:"小安向衛生局投訴：心理師拒絕讓她看自己的紀錄。當事人有權查閱，不得無故拒絕。"});
   if(P(12)===1)ev.push({sev:"warn",ic:"?",scene:"room",h:"一個人讀紀錄",t:"小安一個人讀到「自殺」兩個字，更確定大家都覺得她有問題，差點不再來晤談。"});
@@ -491,7 +511,7 @@ function events(picks){
   if(P(11)===2)ev.push({sev:"warn",ic:"?",scene:"phone",h:"查核卡關",t:"衛生局抽查時，主管無法確認你的紀錄是否完整，整個機構跟著被要求改善。"});
   if(P(3)===0)ev.push({sev:"warn",ic:"!",scene:"phone",h:"母親申請調閱",t:"小安的母親看到紀錄寫她「人格可能有問題」，非常生氣，揚言要投訴。"});
   if(P(8)===0||P(8)===2)ev.push({sev:"warn",ic:"?",scene:"court",h:"被質疑竄改",t:P(8)===0?"紀錄上的立可白痕跡，被質疑事後竄改。":"少了一頁的紀錄，被質疑事後竄改。"});
-  if(P(0)===2)ev.push({sev:"warn",ic:"?",scene:"court",h:"兩週後才補寫",t:"調閱時發現紀錄是兩週後才補寫的，內容的可信度被打上問號。"});
+  if(P(0)===2)ev.push({sev:"warn",ic:"?",scene:"court",h:"抽查後才補寫",t:"調閱時發現紀錄是主管抽查後才補寫的，內容的可信度被打上問號。"});
   if(P(0)===3)ev.push({sev:"warn",ic:"!",scene:"phone",h:"手機裡的個案資料",t:"你的手機記事本還留著小安的晤談重點。手機借朋友看照片時，差點被滑到。"});
   if(!ev.length)ev.push({sev:"good",ic:"✓",scene:"room",h:"順利過關",t:"三個月後，有人申請調閱紀錄。你的紀錄清楚、客觀，有評估也有處置，只需要依程序回應。小安還在持續晤談，焦慮降到 4 分。"});
   const rank={bad:0,warn:1,good:2};return ev.sort((a,b)=>rank[a.sev]-rank[b.sev]).slice(0,3);
@@ -618,7 +638,7 @@ function spr(n,x,y,sc=2,pal={}){const rows=SPR[n];for(let r=0;r<rows.length;r++)
 function glyph(x,y,ch,col){const G={Z:["111","001","010","100","111"],"!":["1","1","1","0","1"],"♪":["011","010","010","110","110"]};
   const g=G[ch];if(!g)return;g.forEach((row,i)=>[...row].forEach((v,j)=>{if(v==="1")R(x+j,y+i,1,1,col)}))}
 function bubble(x,y,w,h){R(x,y,w,h,"#F4EFE6");R(x-1,y+1,1,h-2,"#F4EFE6");R(x+w,y+1,1,h-2,"#F4EFE6");R(x+2,y+h,2,2,"#F4EFE6")}
-function clock(x,y,time){R(x,y,15,15,"#2B2233");R(x+1,y+1,13,13,"#ECE5D2");const [hh,mm]=(time||"9:00").split(":").map(Number);
+function clock(x,y,time){R(x,y,15,15,"#2B2233");R(x+1,y+1,13,13,"#ECE5D2");let [hh,mm]=(time||"9:00").split(":").map(Number);if(isNaN(hh)||isNaN(mm)){const k=tick*12;hh=Math.floor(k/60)%12;mm=k%60}
   const cxp=x+7,cyp=y+7;const a=((hh%12)+mm/60)/12*Math.PI*2,b=mm/60*Math.PI*2;
   for(let i=1;i<=3;i++)R(cxp+Math.round(Math.sin(a)*i),cyp-Math.round(Math.cos(a)*i),1,1,"#2B2233");
   for(let i=1;i<=5;i++)R(cxp+Math.round(Math.sin(b)*i),cyp-Math.round(Math.cos(b)*i),1,1,"#B9564F");R(cxp,cyp,1,1,"#2B2233")}
@@ -632,8 +652,11 @@ function office(t,o,hud){
     [[14,36,8,14],[23,32,9,18],[33,38,7,12],[41,30,10,20],[52,36,12,14]].forEach(([x,y,w,h],i)=>{R(x,y,w,h,"#1D2547");for(let yy=y+2;yy<y+h-1;yy+=3)for(let xx=x+2;xx<x+w-1;xx+=3)if(((xx+yy+i)*7)%5<2)R(xx,yy,1,1,"#F2C14E")})}
   else{const cxo=(t>>2)%40;R(16+cxo,18,12,4,"#FFFFFF");R(18+cxo,16,7,2,"#FFFFFF");R(14,40,50,10,"#7FB27A")}
   R(38,12,2,38,"#1A1F30");R(14,30,50,2,"#1A1F30");
-  clock(150,14,hud.time);
-  R(100,16,26,18,"#E8E0C8");R(102,18,22,14,"#F6F1E2");R(105,21,16,1,"#9CA1B9");R(105,24,12,1,"#9CA1B9");R(110,27,6,3,"#D9483B");
+  clock(150,14,o.spin?"—":hud.time);
+  if(o.montage){const day=o.cal||16+Math.floor(t/10)%6;R(100,13,26,22,"#2B2233");R(101,14,24,20,"#F6F1E2");R(101,14,24,5,"#D9483B");
+    cx.fillStyle="#2B2233";cx.font="8px 'Press Start 2P', monospace";cx.textAlign="center";cx.fillText(String(day),113,31);cx.textAlign="left";
+    const k=t*4,wx=(k%240)-30,cols=["#E0A93B","#6CA0DC","#C46A9A","#7FB27A","#B9564F"];spr("A",wx,42+((t>>1)%2),2,{y:cols[Math.floor(k/240)%cols.length],h:Math.floor(k/240)%2?"#5B4636":"#2B2233"});}
+  else{R(100,16,26,18,"#E8E0C8");R(102,18,22,14,"#F6F1E2");R(105,21,16,1,"#9CA1B9");R(105,24,12,1,"#9CA1B9");R(110,27,6,3,"#D9483B");}
   spr("T",100,40,2,o.tired?{m:"#8C6A5A"}:{});
   if(o.tired&&!o.phone){const z=(t>>1)%10;glyph(124,30-z,"Z","#F4EFE6");if(z>4)glyph(130,24-z,"Z","#F4EFE6")}
   R(54,72,100,6,"#8A5C3A");R(54,78,100,22,"#6B4529");R(58,82,40,1,"#5A3922");R(110,82,40,1,"#5A3922");R(98,84,12,6,"#5A3922");
@@ -700,7 +723,7 @@ function draw(){
   if(sc.k==="office")office(tick,sc,hud);else if(sc.k==="room")roomScene(tick,sc);else if(sc.k==="court")court(tick);else if(sc.k==="street")street(tick);else if(sc.k==="home")home(tick,sc);else office(tick,{night:false,phone:true},{time:"10:00"});
 }
 const reduce=!!(window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches);
-setInterval(()=>{if(!reduce){tick++;draw()}},150);
+setInterval(()=>{if(!reduce){tick++;draw();hudTick()}},150);
 
 /* ================= render ================= */
 function render(){document.body.classList.toggle("host",isHost);renderStatus();renderHud();renderDialog();updateCaret();renderPanel();renderRecord();renderHostbar();draw()}
@@ -711,19 +734,28 @@ function renderStatus(){
   $("#status").innerHTML=h;
 }
 function renderHud(){
-  const h=hudFor(S.step,S.picks);
-  $("#hud").innerHTML=`<div class="hudbox"><span>心理師</span> <span class="px">LV.3</span>
-    <div class="hpbar"><span class="px">HP</span><div class="track"><div class="fill ${h.hp<=15?"low":""}" style="width:${h.hp}%"></div></div><span class="px">${h.hp}%</span></div>
-    <div class="hpbar"><span class="px">$&nbsp;</span><div class="track"><div class="fill money ${h.money<=15?"low":""}" style="width:${h.money}%"></div></div><span class="px">${h.money<=15?"窮":"OK"}</span></div></div>
-    <div class="hudbox clock"><div>${esc(h.day)}</div><div class="px">${esc(h.time)}</div></div>`;
+  const h=hudFor(S.step,S.picks),el=$("#hud");
+  if(!document.getElementById||!document.getElementById("hp-fill")){
+    el.innerHTML=`<div class="hudbox"><span>心理師</span> <span class="px">LV.3</span>
+    <div class="hpbar"><span class="lbl">體力</span><div class="track" id="hp-track"><div class="fill" id="hp-fill" style="width:${h.hp}%"></div></div><span class="px" id="hp-txt">${h.hp}%</span></div>
+    <div class="hpbar"><span class="lbl">存款</span><div class="track" id="m-track"><div class="fill money" id="m-fill" style="width:${h.money}%"></div></div><span class="px" id="m-txt">${h.money}%</span></div></div>
+    <div class="hudbox clock"><div id="hud-day">${esc(h.day)}</div><div class="px" id="hud-time">${esc(h.time)}</div></div>`;
+  }
+  const g=id=>document.getElementById?document.getElementById(id):null,hf=g("hp-fill"),mf=g("m-fill");if(!hf||!mf)return;
+  [hf,mf].forEach(f=>f.classList.toggle("slow",!!h.slow));
+  hf.style.width=h.hp+"%";hf.classList.toggle("low",h.hp<=15);mf.style.width=h.money+"%";mf.classList.toggle("low",h.money<=15);
+  g("hud-day").textContent=h.day;g("hud-time").textContent=h.time==="—"?"⏩":h.time;
+  if(!h.slow||reduce){g("hp-txt").textContent=h.hp+"%";g("m-txt").textContent=h.money+"%"}
 }
+function hudTick(){const g=id=>document.getElementById?document.getElementById(id):null;
+  [["hp-fill","hp-track","hp-txt"],["m-fill","m-track","m-txt"]].forEach(([f,tr,tx])=>{const F=g(f),T=g(tr),X=g(tx);if(F&&T&&X&&T.clientWidth)X.textContent=Math.round(F.offsetWidth/T.clientWidth*100)+"%"})}
 let dlgKey=null,dlgTimer=null,dlgSkip=null;
 function dialogFor(){
   const s=cur();
-  if(s.type==="lobby")return[N("歡迎來到晴光社區心理諮商所。"),N("今晚，你就是這裡的心理師。每一個決定，都由全班投票。")];
+  if(s.type==="lobby")return[N("歡迎來到倫理大師心理諮商所。"),N("你是這裡的心理師。請隨時注意畫面左上角的體力值和存款。每一個決定，都由全班投票。")];
   if(s.type==="story")return storyLines(s.id,S.picks);
-  if(isOver()){const o=ROUNDS[s.r].o[S.picks[s.r]];return[N(o.over),N("GAME OVER：信任歸零。")]}
-  if(s.type==="vote"){const r=ROUNDS[s.r];return[N(typeof r.ctx==="function"?r.ctx(S.picks):r.ctx),{who:r.id==="load"?"主管":"心理師",t:r.q,q:true}]}
+  if(isOver()){const o=ROUNDS[s.r].o[S.picks[s.r]];return[N(o.over),N("GAME OVER："+(o.overT||"信任歸零")+"。")]}
+  if(s.type==="vote"){const r=ROUNDS[s.r];return[N(typeof r.ctx==="function"?r.ctx(S.picks):r.ctx),{who:"心理師",t:r.q,q:true}]}
   if(s.type==="epilogue")return[N("三個月後……"),N("小安的紀錄被申請調閱了。你當初寫下的每一句，現在都會被仔細讀過。")];
   if(s.type==="grade"){const g=gradeInfo().g;return[N("這份紀錄的等級出爐了。"),N(`${g.g} 級：${g.t}。`)]}
   return[N("最後，一起看看ㄅ級的紀錄長什麼樣子。")];
@@ -772,7 +804,7 @@ function tools(list){const L={profile:"小安的資料",facts:"晤談重點",rec
   return `<div class="tools">${list.map(k=>`<button class="tool ${k==="record"?"m-only":""}" data-sheet="${k}">${L[k]}</button>`).join("")}</div>`}
 function openSheet(k){sheetKind=k;renderSheet()}
 function renderSheet(){const w=$("#sheet");if(!sheetKind){w.hidden=true;w.innerHTML="";return}
-  const T={profile:"小安的個案資料",facts:"回想：第 3 次晤談的重點",record:"個案紀錄表"};
+  const T={profile:"小安的個案資料",facts:"回想：小安第 1 次晤談的重點",record:"個案紀錄表"};
   let body="";
   if(sheetKind==="profile")body=profileBox(true).replace("<details","<div").replace("</details>","</div>").replace(/<summary>.*?<\/summary>/,"");
   if(sheetKind==="facts")body=`<ul class="facts">${FACTS.map(f=>`<li>${esc(f)}</li>`).join("")}</ul>`;
@@ -781,17 +813,37 @@ function renderSheet(){const w=$("#sheet");if(!sheetKind){w.hidden=true;w.innerH
 }
 $("#sheet").addEventListener("click",e=>{if(e.target.id==="sheet"||e.target.closest("[data-close]")){sheetKind=null;renderSheet()}});
 document.addEventListener("click",e=>{const t=e.target.closest("[data-sheet]");if(t)openSheet(t.dataset.sheet)});
-function soapBar(r){const code=ROUNDS[r].code;if(!code||r<1||r>8)return"";const N2={S:"主觀陳述",O:"客觀觀察",A:"評估",P:"計畫"};
+function soapBar(r){const code=ROUNDS[r].code;if(!code||r<1||r>8)return"";const N2={S:"個案的主觀陳述（個案自己怎麼說）",O:"心理師的客觀觀察（看得到的行為）",A:"心理師的評估衡鑑",P:"諮商與心理治療計畫"};
   return `<div class="soap">${["S","O","A","P"].map(L=>{const rs=ROUNDS.map((x,i)=>i).filter(i=>i>=1&&i<=8&&!ROUNDS[i].cut&&ROUNDS[i].code===L);
-    const done=rs.every(i=>S.picks[i]!=null)&&L!==code;return `<b class="${L===code?"now":done?"done":""}">${L}</b>`}).join("")}<span>SOAP：現在寫 ${code}（${N2[code]}）</span></div>`}
+    const done=rs.every(i=>S.picks[i]!=null)&&L!==code;return `<b class="${L===code?"now":done?"done":""}">${L}</b>`}).join("")}<span class="soap-def">現在寫 ${code}：${N2[code]}<cite>林家興（2023），頁 150</cite></span></div>`}
+let imgCache={key:"",url:""},imgBusy=false;
+async function makeImage(){
+  const box=document.getElementById("saveimg");if(!box)return;
+  const key=S.epoch+":"+JSON.stringify(S.picks);
+  const show=url=>{const b=document.getElementById("saveimg");if(b)b.innerHTML=`<img src="${url}" alt="我們班寫完的個案紀錄">`};
+  if(imgCache.key===key&&imgCache.url){show(imgCache.url);return}
+  if(imgBusy)return;
+  if(typeof html2canvas!=="function"){box.innerHTML=`<p class="sub">圖片功能沒有載入成功，請直接截圖保存紀錄表。</p>`;return}
+  imgBusy=true;
+  const {sc,g}=gradeInfo();
+  const ex=document.createElement("div");ex.className="record export";
+  ex.innerHTML=`<div class="exp-top"><b>你敢把這句寫進紀錄嗎？</b><span>記錄撰寫原則・體驗活動</span></div>${recordHTML()}<div class="exp-foot">本班評等：${g.g} 級（${sc} / ${MAX} 分）・${esc(g.t)}</div>`;
+  document.body.appendChild(ex);
+  try{
+    if(document.fonts&&document.fonts.ready)await document.fonts.ready;
+    const c=await html2canvas(ex,{scale:2,backgroundColor:"#F3F1EA",logging:false});
+    imgCache={key,url:c.toDataURL("image/png")};show(imgCache.url);
+  }catch(e){const b=document.getElementById("saveimg");if(b)b.innerHTML=`<p class="sub">圖片產生失敗，請直接截圖保存紀錄表。</p>`}
+  finally{ex.remove();imgBusy=false}
+}
 function renderPanel(){
   const el=$("#panel"),s=cur();let h="";
   if(mode==="connecting"){el.innerHTML=`<div class="wait"><span class="pulse"></span>正在連線…</div>`;return}
   if(s.type==="lobby"){
     h=`<div class="box"><h3>怎麼玩</h3><ol class="steps">
-      <li>先熬過一整天、寫好小安第 3 次晤談的紀錄；接著主管要查紀錄、小安要看紀錄，最後還有一個更難的決定。</li>
-      <li>遇到選擇時大家投票，最高票的做法會直接寫進右邊的紀錄。</li>
-      <li>共 ${VOTE_ORDER.length} 個選擇，第一個是今天要接幾位個案。最後看看三個月後發生什麼事，以及這份紀錄拿到ㄅ、ㄆ、ㄇ、ㄈ哪一級。</li></ol></div>`+profileBox(true);
+      <li>故事從一週前開始：主管問你要不要多接一位新個案小安。熬過忙碌的一週，接下她的第一次晤談、寫好紀錄；接著主管要查紀錄、小安要看紀錄，最後還有一個更難的決定。</li>
+      <li>請隨時注意左上角的<b>體力值</b>和<b>存款</b>。存款歸零，或失去個案的信任，就會 GAME OVER。</li>
+      <li>遇到選擇時大家投票，最高票的做法會直接寫進紀錄。共 ${VOTE_ORDER.length} 個選擇，最後看看三個月後發生什麼事，以及這份紀錄拿到ㄅ、ㄆ、ㄇ、ㄈ哪一級。</li></ol></div>`+profileBox(true);
     h+=isHost?(mode==="online"?`<div class="box"><h3>已加入 ${viewersOnline()} 人</h3><div class="names">${Object.values(players).map(p=>`<span>${esc(p.name||"？")}</span>`).join("")||`<span>還沒有人加入</span>`}</div></div><p class="sub">同學用不含 ?host 的網址打開、輸入暱稱就會出現在上面。準備好就點對話框右下角的 ▼ 開始。</p>`:`<p class="sub">${esc(localWhy)}目前是單機模式：沒有線上投票，請用「現場舉手計票」幫每個選項計票。</p>`):`<div class="wait"><span class="pulse"></span>等主持人開始…</div>`;
   }
   else if(s.type==="story"){
@@ -811,7 +863,7 @@ function renderPanel(){
       const c=S.tallies[r]||[0,0,0,0];
       h=eb+`<p class="sub" style="color:var(--warn)">${c.every(x=>x===0)?"這題還沒有人投票。":"平手！"}${isHost?"請主持人點一個選項。":"等主持人決定。"}</p>`+optMenu({clickable:isHost,showCounts:true,counts:c,tie:S.tie});
     } else {
-      h=eb+soapBar(r)+optMenu({clickable:false,showCounts:true,counts:S.tallies[r]||[0,0,0,0],win:S.picks[r]})+tools(["record"])+(S.ta?`<p class="sub" style="color:var(--warn)">平手！由系統抽籤決定。</p>`:"")+(isOver()?`<div class="gameover"><div class="go-t">GAME OVER</div><div class="go-s">信任歸零</div><p>${esc(ROUNDS[r].why)}</p><p class="sub">${isHost?"按下方「回到這一題重選」，全班再投一次。":"等主持人帶大家回到這一題重選。"}</p></div>`:ROUNDS[r].gate?`<p class="sub">你守住了小安的信任，遊戲繼續。這一題不計分。</p>`:ROUNDS[r].unscored?`<p class="sub">這一題不計分，但會影響你今天的體力和錢包。</p>`:`<p class="sub">選項 ${LETTERS[S.picks[r]]} 已寫進紀錄。這樣寫好不好？到最後再揭曉。</p>`);
+      h=eb+soapBar(r)+optMenu({clickable:false,showCounts:true,counts:S.tallies[r]||[0,0,0,0],win:S.picks[r]})+tools(["record"])+(S.ta?`<p class="sub" style="color:var(--warn)">平手！由系統抽籤決定。</p>`:"")+(isOver()?`<div class="gameover"><div class="go-t">GAME OVER</div><div class="go-s">${esc(ROUNDS[r].o[S.picks[r]].overT||"信任歸零")}</div><p>${esc(ROUNDS[r].why)}</p><p class="sub">${isHost?"按下方「回到這一題重選」，全班再投一次。":"等主持人帶大家回到這一題重選。"}</p></div>`:ROUNDS[r].gate?`<p class="sub">${esc(ROUNDS[r].passMsg||"遊戲繼續。這一題不計分。")}</p>`:ROUNDS[r].unscored?`<p class="sub">這一題不計分，但會影響你今天的體力和錢包。</p>`:`<p class="sub">選項 ${LETTERS[S.picks[r]]} 已寫進紀錄。這樣寫好不好？到最後再揭曉。</p>`);
     }
   }
   else if(s.type==="epilogue"){
@@ -825,12 +877,13 @@ function renderPanel(){
     ${tools(["record"])}<p class="sub">紀錄表已經標出每一欄寫得如何。${isHost?"按「看ㄅ級版本」揭曉標準寫法。":"等主持人揭曉ㄅ級版本。"}</p>`;
   }
   else{
-    h=`<div class="eyebrow">ㄅ級版本 · 逐欄對照</div><div class="cmp">`;
+    h=`<div class="box savebox"><h3>我們班寫完的紀錄</h3><p class="sub">手機：長按圖片，選「儲存影像」或「加入照片」。電腦：在圖片上按右鍵另存。</p><div class="saveimg" id="saveimg"><div class="wait"><span class="pulse"></span>圖片產生中…</div></div></div><div class="eyebrow">ㄅ級版本 · 逐欄對照</div><div class="cmp">`;
     VOTE_ORDER.forEach(i=>{const r=ROUNDS[i];if(r.unscored)return;const pk=S.picks[i],best=r.o.findIndex(o=>o.p===3),our=pk!=null?r.o[pk]:null,[mc,ml]=our?markOf(our.p):["b","未作答"];
       h+=`<div class="ci"><h4>${esc(r.k)}${r.code?`（${r.code}）`:""}<span class="mark ${mc}">${ml}</span></h4><div class="two">${pk===best?"":`<div class="ours"><small>我們寫的（${pk!=null?LETTERS[pk]:"—"}）</small>${our?(our.r||esc(our.t)):"—"}</div>`}<div class="best"><small>ㄅ級寫法（${LETTERS[best]}）</small>${r.o[best].r||esc(r.o[best].t)}</div></div><p class="why">${esc(r.why)} <cite>${esc(r.src)}</cite></p></div>`});
-    h+=`</div><div class="box fullnote"><h3>整份ㄅ級晤談紀錄（進展紀錄）・第 3 次晤談</h3><p class="note">個案表示本週有 3 晚躺床超過 1 小時才入睡。個案每天以 1 到 10 分記錄焦慮程度（1 為完全不焦慮，10 為難以忍受），本週多在 7 分，上週為 8 分。個案遲到 15 分鐘，語速快，晤談中看手機 3 次。個案表示與母親同住，近期因換工作的決定與母親爭執，談及此事時哭泣。據個案表示，其精神科醫師診斷為失眠症，目前服用助眠藥物。個案提到「有時覺得消失也沒關係」；經評估無具體計畫、無工具、無自傷史，無立即危險。個案不希望他人知道，評估後暫不通知家屬，並已說明保密例外；已擬定安全計畫並提供 1925 安心專線。計畫：維持每週 1 次晤談；下次練習腹式呼吸，追蹤睡眠紀錄與安全計畫執行情形。</p><p class="why">寫法參考 Corey 等（2024）頁 172 的進展紀錄範例：當事人陳述 → 觀察 → 用量尺看變化 → 評估與處置 → 下次計畫，全部是看得到、可追蹤的事實。</p></div><div class="box"><h3>帶走一句話</h3><p style="margin:0;font-family:var(--serif);font-size:17px">下筆前先想：如果法官和個案都會讀到這句，我還會這樣寫嗎？</p></div><div class="box refs"><h3>參考文獻</h3><p>林家興（2023）。<i>諮商專業倫理：臨床應用與案例分析</i>。心理出版社。</p><p>修慧蘭、林蔚芳、洪莉竹、王淳弘（譯）（2024）。<i>專業助人工作倫理</i>（第三版）。雙葉書廊。原著：Corey, G., Corey, M. S., &amp; Callanan, P. <i>Issues &amp; ethics in the helping professions</i> (11th ed.).</p></div>`;
+    h+=`</div><div class="box fullnote"><h3>整份ㄅ級晤談紀錄（進展紀錄）・第 1 次晤談（初談）</h3><p class="note">已向個案說明晤談架構、收費與保密例外，個案簽署諮商同意書。個案表示本週有 3 晚躺床超過 1 小時才入睡，焦慮自評 7 分（1 為完全不焦慮，10 為難以忍受）。個案遲到 15 分鐘，語速快，晤談中看手機 3 次。個案表示與母親同住，近期因換工作的決定與母親爭執，談及此事時哭泣。據個案表示，其身心科醫師診斷為焦慮症，目前服用安眠藥物。個案提到「有時覺得消失也沒關係」；經評估無具體計畫、無工具、無自傷史，無立即危險。個案不希望他人知道，評估後暫不通知家屬，並已說明保密例外；已擬定安全計畫並提供 1925 安心專線。計畫：維持每週 1 次晤談；下次練習腹式呼吸，追蹤睡眠紀錄與安全計畫執行情形。</p><p class="why">寫法參考 Corey 等（2024）頁 172 的進展紀錄範例：當事人陳述 → 觀察 → 用量尺看變化 → 評估與處置 → 下次計畫，全部是看得到、可追蹤的事實。</p></div><div class="box"><h3>帶走一句話</h3><p style="margin:0;font-family:var(--serif);font-size:17px">寫紀錄前先想：如果法官和個案都會讀到這句，我還會這樣寫嗎？</p></div><div class="box refs"><h3>參考文獻</h3><p>林家興（2023）。<i>諮商專業倫理：臨床應用與案例分析</i>。心理出版社。</p><p>修慧蘭、林蔚芳、洪莉竹、王淳弘（譯）（2024）。<i>專業助人工作倫理</i>（第三版）。雙葉書廊。原著：Corey, G., Corey, M. S., &amp; Callanan, P. <i>Issues &amp; ethics in the helping professions</i> (11th ed.).</p></div>`;
   }
   el.innerHTML=h;
+  if(s.type==="ideal")setTimeout(makeImage,60);
 }
 function recordHTML(){
   const s=cur(),marks=s.type==="grade"||s.type==="ideal",gi=gradeInfo(),P=i=>S.picks[i];
@@ -844,12 +897,12 @@ function recordHTML(){
   const done=i=>P(i)!=null&&!isNow(i);
   const oB=done(2)&&P(2)===1, risk=done(4)?P(4):null, ntf=done(9)?P(9):null;
   const s3=`<div class="form">
-    <div class="fh"><b>晴光社區心理諮商所　個案紀錄</b><span>第 3 次</span></div>
-    <div class="fmeta"><span>個案姓名：小安（化名）</span><span>接案日期：115/10/08</span></div>
+    <div class="fh"><b>倫理大師心理諮商所　個案紀錄</b><span>第 1 次（初談）</span></div>
+    <div class="fmeta"><span>個案姓名：小安（化名）</span><span>接案日期：115/10/22</span></div>
     <div class="fsec">一、治療歷程摘要</div>
     ${row("諮商日期","115/10/22")}
-    ${row("諮商目標","降低焦慮、改善睡眠")}
-    ${row("內容摘要<i class=\"sp\">S</i>",tag(1,"主訴")+`<div class="sub-ent"><span class="lab">家庭</span>個案表示與母親同住，近期因換工作的決定與母親爭執，談及此事時哭泣。</div><div class="sub-ent"><span class="lab">醫療</span>據個案表示，其精神科醫師診斷為失眠症，目前服用助眠藥物。</div>`)}
+    ${row("諮商目標","初談：了解來談問題；初步目標為降低焦慮、改善睡眠")}
+    ${row("內容摘要<i class=\"sp\">S</i>",tag(1,"主訴")+`<div class="sub-ent"><span class="lab">家庭</span>個案表示與母親同住，近期因換工作的決定與母親爭執，談及此事時哭泣。</div><div class="sub-ent"><span class="lab">醫療</span>據個案表示，其身心科醫師診斷為焦慮症，目前服用安眠藥物。</div>`)}
     ${row("行為觀察<i class=\"sp\">O</i>",`<div class="cbs"><span class="cbk">語言表達</span>${cb("正常",false)}${cb("多話",oB)}${cb("小聲",false)}</div><div class="cbs"><span class="cbk">眼神專注</span>${cb("正常",false)}${cb("規避",false)}${cb("閃爍",false)}</div>`+tag(2,"其他描述"))}
     <div class="fsec">二、治療評估</div>
     ${row("治療關係",`<div class="cbs">${cb("良好",P(13)===1)}${cb("適中",false)}${cb("不佳",false)}</div>`)}
@@ -859,13 +912,13 @@ function recordHTML(){
     <div class="fsign"><span>心理師：＿＿＿＿（簽章）</span><span>證書字號：諮心字第○○○○○○號</span><span class="sub-ent ${isNow(0)?"on":""}">紀錄完成日期：${val(0,"115/　/　")}</span></div>
   </div>`;
   const s4=`<div class="form">
-    <div class="fh"><b>晴光社區心理諮商所　個案紀錄</b><span>第 4 次</span></div>
+    <div class="fh"><b>倫理大師心理諮商所　個案紀錄</b><span>第 2 次</span></div>
     ${row("諮商日期","115/10/29")}
     ${row("內容摘要",`<div class="sub-ent ${isNow(12)?"on":""}">${val(12)}</div>`)}
     <div class="fsec">四、特殊註記</div>${row("1",`<div class="sub-ent ${isNow(11)?"on":""}">${val(11)}</div>`)}
   </div>`;
   const s5=`<div class="form">
-    <div class="fh"><b>晴光社區心理諮商所　個案紀錄</b><span>第 5 次</span></div>
+    <div class="fh"><b>倫理大師心理諮商所　個案紀錄</b><span>第 3 次</span></div>
     ${row("諮商日期","115/11/05")}
     ${row("風險評估",`<div class="cbs">${cb("本次不需評估",false)}${cb("低",ntf===1)}${cb("中",false)}${cb(ntf===0?"高（通報時間：115/11/05 21:30）":"高（需註明通報時間）",ntf===0)}</div>`+tag(9,"說明"))}
   </div>`;
