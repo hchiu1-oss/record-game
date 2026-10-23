@@ -505,7 +505,7 @@ const QS=new URLSearchParams(location.search);
 const ROOM=((QS.get("room")||"class").replace(/[^a-zA-Z0-9-]/g,"").slice(0,24))||"class";
 const WANT_HOST=QS.has("host");
 let S=fresh(), mode="connecting", isHost=false, stateRef=null, rdb=null, uid=null, players={}, votesNode={}, joined=false, subscribed=false, localWhy="";
-let connected=false, showLive=true, confirmRestart=false, myVote=null, manual={}, lastFresh=-1;
+let connected=false, showLive=false, confirmRestart=false, myVote=null, manual={}, lastFresh=-1;
 function store(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
 function load(k){try{const v=localStorage.getItem(k);return v?JSON.parse(v):null}catch(e){return null}}
 function sstore(k,v){try{sessionStorage.setItem(k,JSON.stringify(v))}catch(e){}}
@@ -801,11 +801,11 @@ function renderPanel(){
     const r=s.r,eb=`<div class="eyebrow">${S.sub==="vote"?`<span class="cd" id="cd"></span>`:""}選擇 ${VOTE_ORDER.indexOf(r)+1} / ${VOTE_ORDER.length} · ${ROUNDS[r].unscored?"":"紀錄欄位："}${esc(ROUNDS[r].k)}${ROUNDS[r].code?`（${ROUNDS[r].code}）`:""}</div>`;
     if(S.sub==="vote"){
       const ov=mode==="online"?onlineVotes().n:(myVoteNow()!=null?1:0);
-      h=eb+soapBar(r)+optMenu({clickable:true,showCounts:true,counts:liveCounts()});
+      h=eb+soapBar(r)+optMenu({clickable:true,showCounts:false,counts:liveCounts()});
       if(isHost){const m=manual[r]||[0,0,0,0];
         h+=`<div class="box"><h3>現場舉手計票</h3><p class="sub" style="margin-bottom:8px">沒上線的同學舉手，你在這裡加票，會和線上票數合併。</p><div class="hands">${LETTERS.slice(0,ROUNDS[r].o.length).map((L,i)=>`<div class="hand"><b>${L}</b><div class="row"><button class="mini" data-adj="${i}:-1" aria-label="${L} 減一票">−</button><span>${m[i]}</span><button class="mini" data-adj="${i}:1" aria-label="${L} 加一票">＋</button></div></div>`).join("")}</div></div>
-        <p class="sub">已收到 ${ov} 張線上票${showLive?"":"（票數先藏起來，避免大家跟風）"}</p>`+(mode==="online"?`<div class="names">${Object.entries(players).map(([id,p])=>`<span class="${onlineVotes().ids.includes(id)?"voted":""}">${esc(p.name||"？")}</span>`).join("")}</div>`:"");
-      } else h+=`<p class="sub">${myVoteNow()!=null?"已投票，可以改選。時間到或大家都投完，就由最高票當選。":"點一個選項投票，最高票的會寫進紀錄。"} · 已有 ${ov} 人投票</p>`;
+        <p class="sub">已收到 ${ov} 張線上票${showLive?"":"（票數會在大家投完後才公布）"}</p>`+(mode==="online"?`<div class="names">${Object.entries(players).map(([id,p])=>`<span class="${onlineVotes().ids.includes(id)?"voted":""}">${esc(p.name||"？")}</span>`).join("")}</div>`:"");
+      } else h+=`<p class="sub">${myVoteNow()!=null?"已投票，可以改選。最後一個人投完（或時間到）就公布票數，最高票當選。":"點一個選項投票，最高票的會寫進紀錄。"} · 已有 ${ov} 人投票</p>`;
       h+=tools(r>=1&&r<=8?["facts","profile","record"]:["profile","record"]);
     } else if(S.sub==="tie"){
       const c=S.tallies[r]||[0,0,0,0];
@@ -940,7 +940,7 @@ if(!FIREBASE_CONFIG.apiKey||typeof firebase==="undefined"){goLocal("還沒有設
 else{
   firebase.initializeApp(FIREBASE_CONFIG);rdb=firebase.database();
   firebase.auth().onAuthStateChanged(user=>{
-    if(!user){if(WANT_HOST)gate("host");else firebase.auth().signInAnonymously().catch(()=>goLocal("匿名登入沒有開啟。"));return}
+    if(!user){if(WANT_HOST)gate("host");else firebase.auth().signInAnonymously().catch(e=>goLocal("匿名登入失敗（"+((e&&e.code)||"未知錯誤")+"）。"));return}
     uid=user.uid;
     if(WANT_HOST&&user.isAnonymous){gate("host");return}
     isHost=WANT_HOST&&!user.isAnonymous;mode="online";subscribe();
