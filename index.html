@@ -142,6 +142,8 @@ details[open] summary{margin-bottom:8px}
 .exp-top b{font-family:var(--serif);font-size:15px;color:var(--ink)}
 .exp-foot{margin-top:8px;font-family:var(--sans);font-size:13px;font-weight:700;color:var(--ink);text-align:right}
 .saveimg{display:grid;place-items:center;margin-top:8px}
+.savegrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:14px;margin-top:6px}
+.savegrid h4{margin:0;font-family:var(--serif);font-size:15px;color:var(--gold)}
 .saveimg img{width:100%;max-width:440px;display:block;border-radius:4px;-webkit-touch-callout:default;-webkit-user-select:auto;user-select:auto}
 .refs p{margin:0 0 6px;font-size:14px;color:var(--muted);padding-left:2em;text-indent:-2em}
 .refs i{color:var(--text)}
@@ -816,25 +818,33 @@ document.addEventListener("click",e=>{const t=e.target.closest("[data-sheet]");i
 function soapBar(r){const code=ROUNDS[r].code;if(!code||r<1||r>8)return"";const N2={S:"個案的主觀陳述（個案自己怎麼說）",O:"心理師的客觀觀察（看得到的行為）",A:"心理師的評估衡鑑",P:"諮商與心理治療計畫"};
   return `<div class="soap">${["S","O","A","P"].map(L=>{const rs=ROUNDS.map((x,i)=>i).filter(i=>i>=1&&i<=8&&!ROUNDS[i].cut&&ROUNDS[i].code===L);
     const done=rs.every(i=>S.picks[i]!=null)&&L!==code;return `<b class="${L===code?"now":done?"done":""}">${L}</b>`}).join("")}<span class="soap-def">現在寫 ${code}：${N2[code]}<cite>林家興（2023），頁 150</cite></span></div>`}
-let imgCache={key:"",url:""},imgBusy=false;
-async function makeImage(){
-  const box=document.getElementById("saveimg");if(!box)return;
-  const key=S.epoch+":"+JSON.stringify(S.picks);
-  const show=url=>{const b=document.getElementById("saveimg");if(b)b.innerHTML=`<img src="${url}" alt="我們班寫完的個案紀錄">`};
-  if(imgCache.key===key&&imgCache.url){show(imgCache.url);return}
-  if(imgBusy)return;
-  if(typeof html2canvas!=="function"){box.innerHTML=`<p class="sub">圖片功能沒有載入成功，請直接截圖保存紀錄表。</p>`;return}
-  imgBusy=true;
+const BEST_PICKS=ROUNDS.map(r=>r.cut?null:r.unscored?r.o.findIndex(o=>!o.over):r.o.findIndex(o=>o.p===3));
+let imgCache={},imgBusy=false;
+function imgJobs(){
   const {sc,g}=gradeInfo();
-  const ex=document.createElement("div");ex.className="record export";
-  ex.innerHTML=`<div class="exp-top"><b>你敢把這句寫進紀錄嗎？</b><span>記錄撰寫原則・體驗活動</span></div>${recordHTML()}<div class="exp-foot">本班評等：${g.g} 級（${sc} / ${MAX} 分）・${esc(g.t)}</div>`;
-  document.body.appendChild(ex);
-  try{
-    if(document.fonts&&document.fonts.ready)await document.fonts.ready;
-    const c=await html2canvas(ex,{scale:2,backgroundColor:"#F3F1EA",logging:false});
-    imgCache={key,url:c.toDataURL("image/png")};show(imgCache.url);
-  }catch(e){const b=document.getElementById("saveimg");if(b)b.innerHTML=`<p class="sub">圖片產生失敗，請直接截圖保存紀錄表。</p>`}
-  finally{ex.remove();imgBusy=false}
+  return[{id:"saveimg",key:S.epoch+":"+JSON.stringify(S.picks),picks:S.picks,alt:"我們班寫完的個案紀錄",foot:`本班評等：${g.g} 級（${sc} / ${MAX} 分）・${esc(g.t)}`},
+         {id:"saveimg2",key:"best",picks:BEST_PICKS,alt:"ㄅ級參考版本的個案紀錄",foot:`ㄅ級參考版本（${MAX} / ${MAX} 分）・經得起檢視`}];
+}
+async function makeImage(){
+  if(imgBusy)return;
+  const show=(id,url,alt)=>{const b=document.getElementById(id);if(b)b.innerHTML=`<img src="${url}" alt="${alt}">`};
+  for(const job of imgJobs()){
+    const box=document.getElementById(job.id);if(!box)continue;
+    const c0=imgCache[job.id];
+    if(c0&&c0.key===job.key){show(job.id,c0.url,job.alt);continue}
+    if(typeof html2canvas!=="function"){box.innerHTML=`<p class="sub">圖片功能沒有載入成功，請直接截圖保存紀錄表。</p>`;continue}
+    imgBusy=true;
+    const keep=S.picks;S={...S,picks:job.picks};let html;try{html=recordHTML()}finally{S={...S,picks:keep}}
+    const ex=document.createElement("div");ex.className="record export";
+    ex.innerHTML=`<div class="exp-top"><b>你敢把這句寫進紀錄嗎？</b><span>記錄撰寫原則・體驗活動</span></div>${html}<div class="exp-foot">${job.foot}</div>`;
+    document.body.appendChild(ex);
+    try{
+      if(document.fonts&&document.fonts.ready)await document.fonts.ready;
+      const c=await html2canvas(ex,{scale:2,backgroundColor:"#F3F1EA",logging:false});
+      imgCache[job.id]={key:job.key,url:c.toDataURL("image/png")};show(job.id,imgCache[job.id].url,job.alt);
+    }catch(e){const b=document.getElementById(job.id);if(b)b.innerHTML=`<p class="sub">圖片產生失敗，請直接截圖保存紀錄表。</p>`}
+    finally{ex.remove();imgBusy=false}
+  }
 }
 function renderPanel(){
   const el=$("#panel"),s=cur();let h="";
@@ -877,7 +887,7 @@ function renderPanel(){
     ${tools(["record"])}<p class="sub">紀錄表已經標出每一欄寫得如何。${isHost?"按「看ㄅ級版本」揭曉標準寫法。":"等主持人揭曉ㄅ級版本。"}</p>`;
   }
   else{
-    h=`<div class="box savebox"><h3>我們班寫完的紀錄</h3><p class="sub">手機：長按圖片，選「儲存影像」或「加入照片」。電腦：在圖片上按右鍵另存。</p><div class="saveimg" id="saveimg"><div class="wait"><span class="pulse"></span>圖片產生中…</div></div></div><div class="eyebrow">ㄅ級版本 · 逐欄對照</div><div class="cmp">`;
+    h=`<div class="box savebox"><h3>把兩份紀錄存到手機</h3><p class="sub">手機：長按圖片，選「儲存影像」或「加入照片」。電腦：在圖片上按右鍵另存。</p><div class="savegrid"><div><h4>我們班寫完的紀錄</h4><div class="saveimg" id="saveimg"><div class="wait"><span class="pulse"></span>圖片產生中…</div></div></div><div><h4>ㄅ級參考版本</h4><div class="saveimg" id="saveimg2"><div class="wait"><span class="pulse"></span>圖片產生中…</div></div></div></div></div><div class="eyebrow">ㄅ級版本 · 逐欄對照</div><div class="cmp">`;
     VOTE_ORDER.forEach(i=>{const r=ROUNDS[i];if(r.unscored)return;const pk=S.picks[i],best=r.o.findIndex(o=>o.p===3),our=pk!=null?r.o[pk]:null,[mc,ml]=our?markOf(our.p):["b","未作答"];
       h+=`<div class="ci"><h4>${esc(r.k)}${r.code?`（${r.code}）`:""}<span class="mark ${mc}">${ml}</span></h4><div class="two">${pk===best?"":`<div class="ours"><small>我們寫的（${pk!=null?LETTERS[pk]:"—"}）</small>${our?(our.r||esc(our.t)):"—"}</div>`}<div class="best"><small>ㄅ級寫法（${LETTERS[best]}）</small>${r.o[best].r||esc(r.o[best].t)}</div></div><p class="why">${esc(r.why)} <cite>${esc(r.src)}</cite></p></div>`});
     h+=`</div><div class="box fullnote"><h3>整份ㄅ級晤談紀錄（進展紀錄）・第 1 次晤談（初談）</h3><p class="note">已向個案說明晤談架構、收費與保密例外，個案簽署諮商同意書。個案表示本週有 3 晚躺床超過 1 小時才入睡，焦慮自評 7 分（1 為完全不焦慮，10 為難以忍受）。個案遲到 15 分鐘，語速快，晤談中看手機 3 次。個案表示與母親同住，近期因換工作的決定與母親爭執，談及此事時哭泣。據個案表示，其身心科醫師診斷為焦慮症，目前服用安眠藥物。個案提到「有時覺得消失也沒關係」；經評估無具體計畫、無工具、無自傷史，無立即危險。個案不希望他人知道，評估後暫不通知家屬，並已說明保密例外；已擬定安全計畫並提供 1925 安心專線。計畫：維持每週 1 次晤談；下次練習腹式呼吸，追蹤睡眠紀錄與安全計畫執行情形。</p><p class="why">寫法參考 Corey 等（2024）頁 172 的進展紀錄範例：當事人陳述 → 觀察 → 用量尺看變化 → 評估與處置 → 下次計畫，全部是看得到、可追蹤的事實。</p></div><div class="box"><h3>帶走一句話</h3><p style="margin:0;font-family:var(--serif);font-size:17px">寫紀錄前先想：如果法官和個案都會讀到這句，我還會這樣寫嗎？</p></div><div class="box refs"><h3>參考文獻</h3><p>林家興（2023）。<i>諮商專業倫理：臨床應用與案例分析</i>。心理出版社。</p><p>修慧蘭、林蔚芳、洪莉竹、王淳弘（譯）（2024）。<i>專業助人工作倫理</i>（第三版）。雙葉書廊。原著：Corey, G., Corey, M. S., &amp; Callanan, P. <i>Issues &amp; ethics in the helping professions</i> (11th ed.).</p></div>`;
